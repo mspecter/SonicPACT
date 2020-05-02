@@ -55,18 +55,17 @@ public class ListenThread {
         android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO);
 
         // buffer size in bytes
-        int bufferSize = AudioRecord.getMinBufferSize(Constants.SAMPLE_RATE,
+        final int bufferSize = 4096/2;
+
+                /*AudioRecord.getMinBufferSize(Constants.SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT);
+                AudioFormat.ENCODING_PCM_16BIT);*/
 
-        if (bufferSize == AudioRecord.ERROR || bufferSize == AudioRecord.ERROR_BAD_VALUE) {
-            bufferSize = Constants.SAMPLE_RATE * 2;
-        }
+        //if (bufferSize == AudioRecord.ERROR || bufferSize == AudioRecord.ERROR_BAD_VALUE) {
+        //}
 
-        Noise foo = Noise.real(4096);
+        final Noise foo = Noise.real(bufferSize);
 
-        short[] audioBuffer = new short[bufferSize / 2];
-        float[] floatBuffer = new float[4096+2];
 
         AudioRecord record = new AudioRecord(MediaRecorder.AudioSource.DEFAULT,
                 Constants.SAMPLE_RATE,
@@ -80,26 +79,35 @@ public class ListenThread {
         }
         record.startRecording();
 
-        Log.v(LOG_TAG, "Start recording");
-        FloatBuffer f = FloatBuffer.allocate(4096);
+        Log.v(LOG_TAG, "Start recording, buffersize = "+bufferSize);
 
         long shortsRead = 0;
         while (mShouldContinue) {
-            long currentTimestamp = System.nanoTime();
+            final long currentTimestamp = System.nanoTime();
+            final short[] audioBuffer = new short[bufferSize];
             int numberOfShort = record.read(audioBuffer, 0, bufferSize);
             shortsRead += numberOfShort;
 
-            for (Short element: audioBuffer) {
-                f.put(element.floatValue());
-                if (!f.hasRemaining()) {
+            Thread calcthread = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    final FloatBuffer f = FloatBuffer.allocate(bufferSize);
+                    for (Short element: audioBuffer) {
+                        f.put(element.floatValue());
+                        if (!f.hasRemaining()) {
+                            break;
+                        }
+                    }
+                    final float[] floatBuffer = new float[bufferSize +2];
                     foo.fft(f.array(), floatBuffer);
                     calc(floatBuffer, currentTimestamp);
-                    f.clear();
                 }
-            }
+            });
+            calcthread.start();
+
 
             // Notify waveform
-            //mListener.onAudioDataReceived(audioBuffer);
+            mListener.onAudioDataReceived(audioBuffer);
         }
 
         record.stop();
@@ -118,11 +126,10 @@ public class ListenThread {
         float real = fft[index * 2];
         float imaginary = fft[index * 2+1];
         double magnitude = Math.sqrt((double)real*real + (double)imaginary*imaginary);
-        if (magnitude > 99999) {
+        //Log.v(LOG_TAG, "MAGNITUDE DETECTED:" + magnitude );
+        if (magnitude > 9000) {
             long timedist = time - Constants.nanosecondsSinceAudioSent;
             Log.v(LOG_TAG, "HIGH MAGNITUDE DETECTED:" + magnitude + ", TIME SINCE SENT" + timedist);
         }
-
-
     }
 }

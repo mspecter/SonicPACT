@@ -95,7 +95,7 @@ public class BroadcastThread {
         android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO);
         int duration = 1; // seconds
 
-        int numSamples = duration * Constants.SAMPLE_RATE;
+        int numSamples = (int)(.001 * Constants.SAMPLE_RATE);
         double sample[] = new double[numSamples];
         double freqOfTone = 21000; // hz
 

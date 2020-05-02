@@ -27,16 +27,23 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.10.2"
+        }
+    }
+
 }
 
 dependencies {
 
-    compile fileTree(dir: 'libs', include: ['*.jar'])
-    testCompile 'junit:junit:4.12'
-    compile 'com.android.support:appcompat-v7:27.1.1'
-    compile "commons-io:commons-io:+"
-    compile 'com.android.support:design:27.1.1'
-    compile project (':waveform')
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    testImplementation 'junit:junit:4.12'
+    implementation 'com.android.support:appcompat-v7:27.1.1'
+    implementation "commons-io:commons-io:+"
+    implementation 'com.android.support:design:27.1.1'
+    implementation project (':waveform')
     implementation 'com.github.paramsen:noise:2.0.0'
 }
  allprojects {
