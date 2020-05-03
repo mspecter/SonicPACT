@@ -1,18 +1,82 @@
 #include <jni.h>
 #include <string>
-//#include <oboe/Oboe.h>
+#include "AudoGenerator.h"
+#include "../../../../../oboe/src/common/OboeDebug.h"
+#include "AudioListener.h"
+#include "Timing.h"
+#define SAMPLE_RATE 192000;
 
 
-extern "C" JNIEXPORT jstring JNICALL
-Java_com_mit_myapplication_MainActivity_stringFromJNI(
-        JNIEnv* env,
-        jobject /* this */) {
-    std::string hello = "Hello from C++";
-    return env->NewStringUTF(hello.c_str());
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_MIT_sonicPACT_NativeBridge_StartPlayback(JNIEnv *env, jclass clazz) {
+    // Starts the playback of the tone
+    toneGeneratorCallback.startPlayback();
+    toneListenerCallback.beginTimer();
 }
 
 extern "C"
-JNIEXPORT jstring JNICALL
-Java_com_MIT_sonicPACT_NativeBridge_test(JNIEnv *env, jobject thiz) {
-    // TODO: implement test()
+JNIEXPORT void JNICALL
+Java_com_MIT_sonicPACT_NativeBridge_StopPlayback(JNIEnv *env, jclass clazz) {
+    // Stops the playback of the tone
+    toneGeneratorCallback.stopPlayback();
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_MIT_sonicPACT_NativeBridge_InitPlaybackCallbacks(JNIEnv *env, jclass clazz) {
+    oboe::AudioStreamBuilder builder;
+    builder.setDirection(oboe::Direction::Output);
+    builder.setPerformanceMode(oboe::PerformanceMode::LowLatency);
+    builder.setSharingMode(oboe::SharingMode::Exclusive);
+    builder.setFormat(oboe::AudioFormat::Float);
+    builder.setChannelCount(1);
+    builder.setSampleRate(48000);
+    builder.setCallback(&toneGeneratorCallback);
+    oboe::Result result = builder.openManagedStream(toneGeneratorCallback.managedStream);
+    if (result != oboe::Result::OK) {
+        LOGE("Failed to create stream. Error: %s", oboe::convertToText(result));
+    }
+    toneGeneratorCallback.init();
+}
+
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_MIT_sonicPACT_NativeBridge_InitRecordCallbacks(JNIEnv *env, jclass clazz) {
+    oboe::AudioStreamBuilder builder;
+    builder.setDirection(oboe::Direction::Input);
+    builder.setPerformanceMode(oboe::PerformanceMode::LowLatency);
+    builder.setSharingMode(oboe::SharingMode::Exclusive);
+    builder.setFormat(oboe::AudioFormat::I16);
+    builder.setChannelCount(1);
+    builder.setBufferCapacityInFrames(4098);
+    builder.setSampleRate(toneListenerCallback.kSampleRate);
+    builder.setCallback(&toneListenerCallback);
+
+    oboe::Result result = builder.openManagedStream(toneListenerCallback.managedStream);
+    if (result != oboe::Result::OK) {
+        LOGE("Failed to create stream. Error: %s", oboe::convertToText(result));
+    }
+}
+
+extern "C"
+JNIEXPORT jlong JNICALL
+Java_com_MIT_sonicPACT_NativeBridge_GetLastSpikeNS(JNIEnv *env, jclass clazz) {
+    // TODO: implement GetLastSpikeNS()
+
+}
+
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_MIT_sonicPACT_NativeBridge_StartRecord(JNIEnv *env, jclass clazz) {
+    toneListenerCallback.startRecord();
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_MIT_sonicPACT_NativeBridge_StopRecord(JNIEnv *env, jclass clazz) {
+    toneListenerCallback.stopRecord();
 }

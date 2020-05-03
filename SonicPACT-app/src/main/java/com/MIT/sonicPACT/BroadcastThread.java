@@ -66,7 +66,7 @@ public class BroadcastThread {
     }
 
     public void startPlayback() {
-        Log.v(LOG_TAG, "StartPlayback");
+        //Log.v(LOG_TAG, "StartPlayback");
 
         if (mThread != null)
             return;
@@ -83,7 +83,10 @@ public class BroadcastThread {
     }
 
     public void stopPlayback() {
-        Log.v(LOG_TAG, "StopPlayback");
+        //Log.v(LOG_TAG, "StopPlayback");
+
+        NativeBridge.StopPlayback();
+        stopBLE();
         if (mThread == null)
             return;
 
@@ -91,7 +94,7 @@ public class BroadcastThread {
         mThread = null;
     }
 
-    private void play() {
+    private void play_java(){
         android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO);
         int duration = 1; // seconds
 
@@ -125,26 +128,35 @@ public class BroadcastThread {
                 AudioTrack.MODE_STATIC);
 
         audioTrack.write(generatedSnd, 0, generatedSnd.length);
+        audioTrack.play();
+        Constants.nanosecondsSinceAudioSent = System.nanoTime();
+
+    }
+
+    private void play_jni() {
+        Constants.nanosecondsSinceAudioSent = System.nanoTime();
+        NativeBridge.StartPlayback();
+    }
+
+    private void play() {
         Thread thread = new Thread(){
             public void run(){
-                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO);
-                audioTrack.play();
-                Constants.nanosecondsSinceAudioSent = System.nanoTime();
+                play_jni();
             }
         };
-
         thread.start();
-
 
         // Broadcast BTLE here
         this.startBLE();
-        this.stopBLE();
+        //this.stopBLE();
 
         try {
             thread.join();
         }
         catch (InterruptedException e) {
         }
+
+
     }
 
     /**
@@ -152,7 +164,7 @@ public class BroadcastThread {
      */
     private void startBLE(){
 
-        Log.d(TAG, "Service: Starting Advertising");
+        //Log.d(TAG, "Service: Starting Advertising");
 
         if (mAdvertiseCallback == null) {
 
@@ -170,7 +182,7 @@ public class BroadcastThread {
      * Stops BLE Advertising.
      */
     private void stopBLE() {
-        Log.d(TAG, "Service: Stopping Advertising");
+        //Log.d(TAG, "Service: Stopping Advertising");
         if (mBluetoothLeAdvertiser != null) {
             mBluetoothLeAdvertiser.stopAdvertising(mAdvertiseCallback);
             mAdvertiseCallback = null;

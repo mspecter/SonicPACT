@@ -86,6 +86,7 @@ public class ListenThread {
             final long currentTimestamp = System.nanoTime();
             final short[] audioBuffer = new short[bufferSize];
             int numberOfShort = record.read(audioBuffer, 0, bufferSize);
+            /*
             shortsRead += numberOfShort;
 
             Thread calcthread = new Thread(new Runnable() {
@@ -105,7 +106,7 @@ public class ListenThread {
             });
             calcthread.start();
 
-
+            */
             // Notify waveform
             mListener.onAudioDataReceived(audioBuffer);
         }

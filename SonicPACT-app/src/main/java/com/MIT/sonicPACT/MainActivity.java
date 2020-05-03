@@ -52,6 +52,12 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        //Log.i(TAG, "from C++:"+ NativeBridge.test());
+        // Initialize the native audio callbacks for playback
+        NativeBridge.InitPlaybackCallbacks();
+        NativeBridge.InitRecordCallbacks();
+        NativeBridge.StartRecord();
+
         setContentView(R.layout.activity_main);
 
         Toolbar toolbar = findViewById(R.id.toolbar);
