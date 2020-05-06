@@ -30,6 +30,7 @@ Java_com_MIT_sonicPACT_NativeBridge_InitPlaybackCallbacks(JNIEnv *env, jclass cl
     builder.setDirection(oboe::Direction::Output);
     builder.setPerformanceMode(oboe::PerformanceMode::LowLatency);
     builder.setSharingMode(oboe::SharingMode::Exclusive);
+    builder.setBufferCapacityInFrames(128);
     builder.setFormat(oboe::AudioFormat::Float);
     builder.setChannelCount(1);
     builder.setSampleRate(48000);
@@ -51,7 +52,7 @@ Java_com_MIT_sonicPACT_NativeBridge_InitRecordCallbacks(JNIEnv *env, jclass claz
     builder.setSharingMode(oboe::SharingMode::Exclusive);
     builder.setFormat(oboe::AudioFormat::I16);
     builder.setChannelCount(1);
-    builder.setBufferCapacityInFrames(4098);
+    builder.setBufferCapacityInFrames(BUFFSIZE);
     builder.setSampleRate(toneListenerCallback.kSampleRate);
     builder.setCallback(&toneListenerCallback);
 
@@ -65,6 +66,7 @@ extern "C"
 JNIEXPORT jlong JNICALL
 Java_com_MIT_sonicPACT_NativeBridge_GetLastSpikeNS(JNIEnv *env, jclass clazz) {
     // TODO: implement GetLastSpikeNS()
+    return (jlong) toneListenerCallback.lastSpikeStartTime;
 
 }
 

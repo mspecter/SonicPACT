@@ -19,6 +19,7 @@ add_library( # Sets the name of the library.
              kissfft/kiss_fft.c
              kissfft/tools/kiss_fftr.c
         )
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Ofast")
 
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by

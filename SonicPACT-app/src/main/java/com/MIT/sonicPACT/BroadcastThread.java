@@ -15,18 +15,26 @@
 package com.MIT.sonicPACT;
 
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.le.AdvertiseCallback;
 import android.bluetooth.le.AdvertiseData;
 import android.bluetooth.le.AdvertiseSettings;
+import android.bluetooth.le.AdvertisingSet;
+import android.bluetooth.le.AdvertisingSetCallback;
+import android.bluetooth.le.AdvertisingSetParameters;
 import android.bluetooth.le.BluetoothLeAdvertiser;
+import android.bluetooth.le.PeriodicAdvertisingParameters;
 import android.content.Context;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
+import android.os.ParcelUuid;
 import android.util.Log;
 
 import java.nio.ShortBuffer;
+import java.util.Random;
+import java.util.UUID;
 
 import static android.os.SystemClock.elapsedRealtimeNanos;
 
@@ -40,6 +48,7 @@ public class BroadcastThread {
     private ShortBuffer mSamples;
 
     private BluetoothLeAdvertiser mBluetoothLeAdvertiser;
+    private BluetoothAdapter mBluetoothAdapter;
     private AdvertiseCallback mAdvertiseCallback;
 
     public BroadcastThread(Context context) {
@@ -48,7 +57,30 @@ public class BroadcastThread {
                 (BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE);
 
         if (mBluetoothManager != null) {
-            BluetoothAdapter mBluetoothAdapter = mBluetoothManager.getAdapter();
+            mBluetoothAdapter = mBluetoothManager.getAdapter();
+            mBluetoothAdapter.setName(Constants.DEV_NAME);
+
+            Log.e(LOG_TAG, "BLUETOOTH ADDR: "+mBluetoothAdapter.getAddress());
+            Log.e(LOG_TAG, "BLUETOOTH NAME: "+mBluetoothAdapter.getName());
+            // Check if all features are supported
+            if (mBluetoothAdapter.isLe2MPhySupported()) {
+                Log.e(LOG_TAG, "2M PHY supported!");
+            }
+            else {
+                Log.e(LOG_TAG, "2M PHY not supported!");
+            }
+            if (mBluetoothAdapter.isLeExtendedAdvertisingSupported()) {
+                Log.e(LOG_TAG, "LE Extended Advertising supported!");
+            }
+            else {
+                Log.e(LOG_TAG, "LE Extended Advertising not supported!");
+            }
+            if (mBluetoothAdapter.isLePeriodicAdvertisingSupported()) {
+                Log.e(LOG_TAG, "LE PERIODIC Advertising supported!");
+            }
+            else {
+                Log.e(LOG_TAG, "LE PERIODIC Advertising not supported!");
+            }
             if (mBluetoothAdapter != null) {
                 mBluetoothLeAdvertiser = mBluetoothAdapter.getBluetoothLeAdvertiser();
             }
@@ -85,8 +117,8 @@ public class BroadcastThread {
     public void stopPlayback() {
         //Log.v(LOG_TAG, "StopPlayback");
 
-        NativeBridge.StopPlayback();
         stopBLE();
+        NativeBridge.StopPlayback();
         if (mThread == null)
             return;
 
@@ -136,44 +168,183 @@ public class BroadcastThread {
     private void play_jni() {
         Constants.nanosecondsSinceAudioSent = System.nanoTime();
         NativeBridge.StartPlayback();
+        Constants.beganPlayback = true;
     }
 
     private void play() {
-        Thread thread = new Thread(){
-            public void run(){
-                play_jni();
+        this.startBLE_periodic();
+        /*
+        for (int i = 0; i < 100; i++) {
+
+            // Broadcast BTLE here
+            this.startBLE();
+
+            // wait 20 ms seconds
+            while (!Constants.beganPlayback)
+                try {
+                    Thread.sleep(1);
+                } catch (Exception e){}
+
+            try {
+                Thread.sleep(30);
+            } catch (Exception e){}
+
+            NativeBridge.StopPlayback();
+            // Sleep another 20 ms
+            try {
+                Thread.sleep(300);
+            } catch (Exception e){}
+
+            // stops BLE playback
+            this.stopPlayback();
+            Constants.beganPlayback=false;
+
+            // wait a second
+            try {
+                Thread.sleep(10000 );
+            } catch (Exception e){}
+        }*/
+
+
+    }
+
+    public AdvertisingSet currentAdvertisingSet = null;
+
+    private void startBLE_periodic() {
+        BluetoothAdapter adapter = this.mBluetoothAdapter;
+        BluetoothLeAdvertiser advertiser = this.mBluetoothLeAdvertiser;
+
+        // Check if all features are supported
+        if (!adapter.isLe2MPhySupported()) {
+            Log.e(LOG_TAG, "2M PHY not supported!");
+            return;
+        }
+        if (!adapter.isLeExtendedAdvertisingSupported()) {
+            Log.e(LOG_TAG, "LE Extended Advertising not supported!");
+            return;
+        }
+
+        int maxDataLength = adapter.getLeMaximumAdvertisingDataLength();
+
+        AdvertisingSetParameters.Builder parameters = (new AdvertisingSetParameters.Builder())
+                .setLegacyMode(false)
+                .setInterval(AdvertisingSetParameters.INTERVAL_MIN)
+                .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_HIGH)
+                .setPrimaryPhy(BluetoothDevice.PHY_LE_1M)
+                .setSecondaryPhy(BluetoothDevice.PHY_LE_2M);
+
+        PeriodicAdvertisingParameters.Builder params = (new PeriodicAdvertisingParameters.Builder())
+                .setIncludeTxPower(true)
+                .setInterval(80);
+
+        AdvertiseData data = (new AdvertiseData.Builder())
+                .setIncludeDeviceName(true).build();
+
+        AdvertisingSetCallback callback = new AdvertisingSetCallback() {
+            @Override
+            public void onAdvertisingSetStarted(AdvertisingSet advertisingSet, int txPower, int status) {
+                Log.i(LOG_TAG, "onAdvertisingSetStarted(): txPower:" + txPower + " , status: "
+                        + status);
+                currentAdvertisingSet = advertisingSet;
+            }
+
+            @Override
+            public void onAdvertisingSetStopped(AdvertisingSet advertisingSet) {
+                Log.i(LOG_TAG, "onAdvertisingSetStopped():");
             }
         };
-        thread.start();
 
-        // Broadcast BTLE here
-        this.startBLE();
-        //this.stopBLE();
+        advertiser.startAdvertisingSet(parameters.build(), data, null, params.build(), data, callback);
 
-        try {
-            thread.join();
+        while (currentAdvertisingSet == null){
+            try{
+                Thread.sleep(1);
+            }catch (Exception e){ }
         }
-        catch (InterruptedException e) {
-        }
+        Log.i(LOG_TAG, "ENDING ADV");
 
-
+        //currentAdvertisingSet.enableAdvertising(true, 0, 0);
     }
 
     /**
      * Starts BLE Advertising.
      */
     private void startBLE(){
+        startBLE_periodic();
+        if (true)
+            return;
 
         //Log.d(TAG, "Service: Starting Advertising");
 
         if (mAdvertiseCallback == null) {
 
-            AdvertiseSettings settings = buildAdvertiseSettings();
-            AdvertiseData data = buildAdvertiseData();
+            AdvertiseSettings settings = new AdvertiseSettings.Builder()
+                    .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
+                    .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_HIGH)
+                    .build();
+
+            AdvertiseData data = new AdvertiseData.Builder()
+//                    .addServiceUuid(Constants.Service_UUID)
+//                    .addServiceData(Constants.Service_UUID, "hello!".getBytes())
+                    .setIncludeDeviceName(true)
+  //                  .addManufacturerData(0x08A2, "derp".getBytes())
+                    .build();
+
+            PeriodicAdvertisingParameters periodic = new PeriodicAdvertisingParameters.Builder()
+                    .setIncludeTxPower(true)
+                    .setInterval(88)
+                    .build();
+
             mAdvertiseCallback = new SampleAdvertiseCallback();
 
-            if (mBluetoothLeAdvertiser != null)
-                mBluetoothLeAdvertiser.startAdvertising(settings, data, mAdvertiseCallback);
+            AdvertisingSetParameters.Builder parameters = new AdvertisingSetParameters.Builder();
+//                    .setInterval(AdvertisingSetParameters.INTERVAL_MEDIUM)
+//                    .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_HIGH)
+//                    .setAnonymous(false);
+                    //.setPrimaryPhy(BluetoothDevice.PHY_LE_1M)
+                    //.setSecondaryPhy(BluetoothDevice.PHY_LE_2M);
+                    //.setIncludeTxPower(true);
+
+            AdvertisingSetCallback callback = new AdvertisingSetCallback() {
+                @Override
+                public void onAdvertisingSetStarted(AdvertisingSet advertisingSet, int txPower, int status) {
+                    if (advertisingSet == null)
+                        Log.i(LOG_TAG, "onAdvertisingSetStarted(): ERROR");
+                    else {
+
+                        Log.i(LOG_TAG, "onAdvertisingSetStarted(): txPower:" + txPower + " , status: "
+                                + status);
+                    }
+
+                }
+
+                public void onAdvertisingDataSet(AdvertisingSet advertisingSet, int status) {
+                    if (advertisingSet == null)
+                        Log.i(LOG_TAG, "onAdvertisingSetStarted(): ERROR " + status);
+
+                    Log.i(LOG_TAG, "onAdvertisingSetStarted(): status: " + status);
+
+                }
+
+                @Override
+                public void onAdvertisingSetStopped(AdvertisingSet advertisingSet) {
+                    Log.i(LOG_TAG, "onAdvertisingSetStopped():");
+                }
+
+                @Override
+                public void onPeriodicAdvertisingDataSet(AdvertisingSet advertisingSet, int status) {
+                    if (advertisingSet == null)
+                        Log.i(LOG_TAG, "onAdvertisingDataSet(): ERROR: "+ status);
+                    else {
+                        Log.i(LOG_TAG, "onPeriodicAdvertisingDataSet() status: " + status);
+                    }
+                }
+            };
+
+           //mBluetoothLeAdvertiser.startAdvertisingSet(parameters.build(), null, null, periodic, data, callback);
+
+           if (mBluetoothLeAdvertiser != null)
+               mBluetoothLeAdvertiser.startAdvertising(settings, data, mAdvertiseCallback);
 
         }
     }
@@ -183,30 +354,10 @@ public class BroadcastThread {
      */
     private void stopBLE() {
         //Log.d(TAG, "Service: Stopping Advertising");
-        if (mBluetoothLeAdvertiser != null) {
+        if (mBluetoothLeAdvertiser != null && mAdvertiseCallback != null) {
             mBluetoothLeAdvertiser.stopAdvertising(mAdvertiseCallback);
             mAdvertiseCallback = null;
         }
-    }
-
-    /**
-     * Returns an AdvertiseData object which includes the Service UUID and Device Name.
-     */
-    private AdvertiseData buildAdvertiseData() {
-
-        AdvertiseData.Builder dataBuilder = new AdvertiseData.Builder();
-        dataBuilder.addServiceUuid(Constants.Service_UUID);
-        dataBuilder.addServiceData(Constants.Service_UUID, "hello!".getBytes());
-        dataBuilder.setIncludeDeviceName(true);
-
-        return dataBuilder.build();
-    }
-
-    private AdvertiseSettings buildAdvertiseSettings() {
-        AdvertiseSettings.Builder settingsBuilder = new AdvertiseSettings.Builder();
-        settingsBuilder.setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_POWER);
-        //settingsBuilder.setTimeout(0);
-        return settingsBuilder.build();
     }
 
     private class SampleAdvertiseCallback extends AdvertiseCallback {
@@ -221,6 +372,15 @@ public class BroadcastThread {
         public void onStartSuccess(AdvertiseSettings settingsInEffect) {
             super.onStartSuccess(settingsInEffect);
             Log.d(TAG, "Advertising successfully started");
+            Thread thread = new Thread() {
+                public void run() {
+                    play_jni();
+                }
+            };
+            thread.start();
+            try {
+                thread.join();
+            } catch (InterruptedException e) {}
         }
     }
 }

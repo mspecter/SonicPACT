@@ -14,6 +14,7 @@
 
 package com.MIT.sonicPACT;
 
+import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.content.Context;
@@ -45,18 +46,53 @@ public class MainActivity extends AppCompatActivity {
     private BluetoothAdapter mBluetoothAdapter;
 
     public static final int REQUEST_ENABLE_BT = 1;
-
     private static final int REQUEST_RECORD_AUDIO = 13;
 
+    private static final int REQUEST_LOC= 99999;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        //Log.i(TAG, "from C++:"+ NativeBridge.test());
+        // Enable bluetooth
+        // Initializes Bluetooth adapter.
+        final BluetoothManager bluetoothManager =
+                (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+
+        mBluetoothAdapter = bluetoothManager.getAdapter();
+
+        showErrorText("Enabling bt");
+
+        // Is Bluetooth supported on this device?
+        if (mBluetoothAdapter != null) {
+
+            // Is Bluetooth turned on?
+            if (mBluetoothAdapter.isEnabled()) {
+
+                // Are Bluetooth Advertisements supported on this device?
+                if (mBluetoothAdapter.isMultipleAdvertisementSupported()) {
+
+                    // Everything is supported and enabled, load the fragments.
+                    showErrorText("BLUETOOTH ENABLED");
+
+                } else {
+
+                    // Bluetooth Advertisements are not supported.
+                    showErrorText("bt_ads_not_supported");
+                }
+            } else {
+
+                // Prompt user to turn on Bluetooth (logic continues in onActivityResult()).
+                Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+            }
+        } else {
+            // Bluetooth is not supported.
+            showErrorText("Bluetooth Not Enabled");
+        }
         // Initialize the native audio callbacks for playback
         NativeBridge.InitPlaybackCallbacks();
         NativeBridge.InitRecordCallbacks();
-        NativeBridge.StartRecord();
+        //NativeBridge.StartRecord();
 
         setContentView(R.layout.activity_main);
 
@@ -64,12 +100,15 @@ public class MainActivity extends AppCompatActivity {
         setSupportActionBar(toolbar);
 
         mRealtimeWaveformView = findViewById(R.id.waveformView);
-        mListenThread = new ListenThread(new AudioDataReceivedListener() {
-            @Override
-            public void onAudioDataReceived(short[] data) {
-                mRealtimeWaveformView.setSamples(data);
-            }
-        });
+
+        // This starts the listener
+        mListenThread = new ListenThread(
+                new AudioDataReceivedListener() {
+                    @Override
+                    public void onAudioDataReceived(short[] data) {
+                        mRealtimeWaveformView.setSamples(data);
+                    }
+                }, mBluetoothAdapter);
 
         final WaveformView mPlaybackView = findViewById(R.id.playbackWaveformView);
 
@@ -107,42 +146,6 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
 
-        // enable and test bluetooth
-        // Initializes Bluetooth adapter.
-        final BluetoothManager bluetoothManager =
-                (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
-
-        mBluetoothAdapter = bluetoothManager.getAdapter();
-
-        showErrorText("Enabling bt");
-
-        // Is Bluetooth supported on this device?
-        if (mBluetoothAdapter != null) {
-
-            // Is Bluetooth turned on?
-            if (mBluetoothAdapter.isEnabled()) {
-
-                // Are Bluetooth Advertisements supported on this device?
-                if (mBluetoothAdapter.isMultipleAdvertisementSupported()) {
-
-                    // Everything is supported and enabled, load the fragments.
-                    showErrorText("BLUETOOTH ENABLED");
-
-                } else {
-
-                    // Bluetooth Advertisements are not supported.
-                    showErrorText("bt_ads_not_supported");
-                }
-            } else {
-
-                // Prompt user to turn on Bluetooth (logic continues in onActivityResult()).
-                Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-                startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
-            }
-        } else {
-            // Bluetooth is not supported.
-            showErrorText("Bluetooth Not Enabled");
-        }
 
     }
 
@@ -153,9 +156,6 @@ public class MainActivity extends AppCompatActivity {
             case REQUEST_ENABLE_BT:
                 if (resultCode == RESULT_OK) {
                     if (mBluetoothAdapter.isMultipleAdvertisementSupported()) {
-                        // Everything is supported and enabled, load the fragments.
-                        //setupFragments();
-
                     } else {
                         // Bluetooth Advertisements are not supported.
                         showErrorText("bt_ads_not_supported");
@@ -174,7 +174,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void showErrorText(String text) {
         Log.i(TAG, "Error:" + text);
-        Log.println(1, TAG, "WIN");
     }
 
     @Override
@@ -184,31 +183,29 @@ public class MainActivity extends AppCompatActivity {
         mBroadcastThread.stopPlayback();
     }
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-
-        return super.onOptionsItemSelected(item);
-    }
-
     private void startAudioRecordingSafe() {
         if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO)
                 == PackageManager.PERMISSION_GRANTED) {
             mListenThread.startRecording();
         } else {
             requestMicrophonePermission();
+        }
+    }
+
+    private void requestLocationPermission() {
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_COARSE_LOCATION)) {
+            // Show dialog explaining why we need record audio
+            Snackbar.make(mRealtimeWaveformView, "LOCATION!!!",
+                    Snackbar.LENGTH_INDEFINITE).setAction("OK", new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    ActivityCompat.requestPermissions(MainActivity.this, new String[]{
+                            Manifest.permission.ACCESS_COARSE_LOCATION}, REQUEST_LOC);
+                }
+            }).show();
+        } else {
+            ActivityCompat.requestPermissions(MainActivity.this, new String[]{
+                    Manifest.permission.ACCESS_COARSE_LOCATION}, REQUEST_LOC);
         }
     }
 
@@ -228,7 +225,6 @@ public class MainActivity extends AppCompatActivity {
                     android.Manifest.permission.RECORD_AUDIO}, REQUEST_RECORD_AUDIO);
         }
     }
-
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {

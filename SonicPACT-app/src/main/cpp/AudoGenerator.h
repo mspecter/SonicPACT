@@ -5,6 +5,7 @@
 #ifndef SONICPACT_AUDOGENERATOR_H
 #include <oboe/Oboe.h>
 #include <math.h>
+#include <thread>
 
 #define TONE_FREQ 21000; // hz
 
@@ -24,6 +25,10 @@ public:
     void startPlayback() {
         //managedStream->requestStart();
         this->shouldBroadcast=true;
+        while(!this->isBroadcasting){
+            std::chrono::nanoseconds timespan(1);
+            std::this_thread::sleep_for(timespan);
+        };
     }
 
     void stopPlayback() {
@@ -50,6 +55,7 @@ private:
     static float constexpr kTwoPi = kPI * 2;
     static double constexpr mPhaseIncrement = kFrequency * kTwoPi / (double) kSampleRate;
     bool shouldBroadcast = false;
+    bool isBroadcasting = false;
 };
 
 static AudioGeneratorCallback toneGeneratorCallback;

@@ -17,11 +17,11 @@ typedef struct {
     kiss_fftr_cfg config;
 } KissRealConfig;
 
-#define BUFFSIZE 128
+#define BUFFSIZE 256
 
 static int64_t getTimeNsec() {
     struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
+    clock_gettime(CLOCK_BOOTTIME, &now);
     return (int64_t) now.tv_sec*1000000000LL + now.tv_nsec;
 }
 
@@ -62,17 +62,20 @@ public:
     static int constexpr kChannelCount = 1;
     static int constexpr kSampleRate = 48000;
     static float constexpr kFrequency = 15000;
+    uint64_t lastSpikeStartTime = 0;
 private:
-    // Stream params
-    // Keeps track of where the wave is
-    float mPhase = 0.0;
+    int64_t currentBufferIndx = 0;
+    // Last time we saw a spike
+    uint64_t lastSpikeTime = 0;
 
     // Wave params, these could be instance variables in order to modify at runtime
-    static float constexpr kAmplitude = 0.9f;
-    float audiobuffer[4098] = {0};
+    static int constexpr index = (int)( (double) (BUFFSIZE + 2) / kSampleRate * kFrequency);
+    static int constexpr compare = (int)( (double) (BUFFSIZE + 2) / kSampleRate * (kFrequency-1000));
+    float audiobuffer[BUFFSIZE+2] = {0};
     float fftbuffer[4098+2] = {0};
     KissRealConfig *cfg;
-    bool shouldTakeMeasure = false;
+    bool shouldTakeMeasure = true;
+    bool isContiuing = false;
     uint64_t startNS = 0;
 
 };
