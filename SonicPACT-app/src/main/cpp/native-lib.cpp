@@ -59,7 +59,7 @@ Java_com_MIT_sonicPACT_NativeBridge_InitRecordCallbacks(JNIEnv *env, jclass claz
     // valid options for this device are 18 and 19. worth testing both?
     builder.setDeviceId(18);
     builder.setChannelCount(1);
-    builder.setFramesPerCallback(BUFFSIZE);
+    //builder.setFramesPerCallback(BUFFSIZE);
     builder.setSampleRate(toneListenerCallback.kSampleRate);
     builder.setCallback(&toneListenerCallback);
 

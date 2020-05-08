@@ -107,10 +107,10 @@ public class LeaderThread {
                 long bluetoothresult = btHandler.getLastBTValue();
 
                 Log.d(TAG, "distance = " + ((result - bluetoothresult - 7600000*4) / 2)/100000.0);
-                // update last recv time
-                last_recv_chirp_time = new_recv_chirp_time;
 
                  */
+                // update last recv time
+                last_recv_chirp_time = new_recv_chirp_time;
             }
             //Log.d(TAG, "LeaderThread running!");
 
