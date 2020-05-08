@@ -6,30 +6,16 @@ import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
-import android.media.AudioFormat;
-import android.media.AudioRecord;
-import android.media.MediaRecorder;
-import com.paramsen.noise.Noise;
 
 import android.os.Handler;
 import android.os.ParcelUuid;
-import android.os.SystemClock;
 import android.util.Log;
 
-import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
-import static android.os.SystemClock.elapsedRealtimeNanos;
-import static com.MIT.sonicPACT.NativeBridge.GetLastSpikeNS;
 
 public class ListenThread {
-    private static final String LOG_TAG = ListenThread.class.getSimpleName();
     private static final String TAG = ListenThread.class.getSimpleName();
-
-    private static final long SCAN_PERIOD = 5000;
     private BluetoothAdapter mBluetoothAdapter;
     private BluetoothLeScanner mBluetoothLeScanner;
     private ScanCallback mScanCallback;
@@ -51,11 +37,12 @@ public class ListenThread {
     }
 
     public void startRecording() {
-        Log.v(LOG_TAG, "StartRecording");
+        Log.v(TAG, "StartRecording");
         if (mThread != null)
             return;
 
         mShouldContinue = true;
+
         mThread = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -66,7 +53,7 @@ public class ListenThread {
     }
 
     public void stopRecording() {
-        Log.v(LOG_TAG, "StopRecording");
+        Log.v(TAG, "StopRecording");
 
         this.stopScanning();
         if (mThread == null)
@@ -148,14 +135,14 @@ public class ListenThread {
         // F_s = sample rate
 
         // index = (fftSize / SampleRate) * freq
-        int index = (int)( (double) fft.length / Constants.SAMPLE_RATE * Constants.freqOfTone);
+        int index = (int)( (double) fft.length / Utils.SAMPLE_RATE * Utils.freqOfTone);
         float real = fft[index * 2];
         float imaginary = fft[index * 2+1];
         double magnitude = Math.sqrt((double)real*real + (double)imaginary*imaginary);
         //Log.v(LOG_TAG, "MAGNITUDE DETECTED:" + magnitude );
         if (magnitude > 9000) {
-            long timedist = time - Constants.nanosecondsSinceAudioSent;
-            Log.v(LOG_TAG, "HIGH MAGNITUDE DETECTED:" + magnitude + ", TIME SINCE SENT" + timedist);
+            long timedist = time - Utils.nanosecondsSinceAudioSent;
+            Log.v(TAG, "HIGH MAGNITUDE DETECTED:" + magnitude + ", TIME SINCE SENT" + timedist);
         }
     }
 
@@ -192,7 +179,7 @@ public class ListenThread {
         ScanFilter.Builder builder = new ScanFilter.Builder();
         // Comment out the below line to see all BLE devices around you
         //builder.setServiceUuid(Constants.Service_UUID);
-        builder.setDeviceName(Constants.DEV_NAME);
+        builder.setDeviceName(Utils.DEV_NAME_FOLLOWER);
         scanFilters.add(builder.build());
 
         return scanFilters;
@@ -247,7 +234,7 @@ public class ListenThread {
                 res += result.getScanRecord().getServiceUuids() + ", ";
                 //res += svcData + ", ";
 
-                if (result.getDevice().getName() != null && result.getDevice().getName().contains(Constants.DEV_NAME)) {
+                if (result.getDevice().getName() != null && result.getDevice().getName().contains(Utils.DEV_NAME_FOLLOWER)) {
 
                     Log.d("Scan:", "RESULT SCAN: " + res);
                     try {
@@ -282,7 +269,7 @@ public class ListenThread {
         @Override
         public void onScanFailed(int errorCode) {
             super.onScanFailed(errorCode);
-            Log.d(LOG_TAG, "SCAN FAILED: " + errorCode);
+            Log.d(TAG, "SCAN FAILED: " + errorCode);
 
         }
     }

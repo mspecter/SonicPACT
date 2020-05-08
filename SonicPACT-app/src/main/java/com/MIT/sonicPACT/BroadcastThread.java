@@ -29,14 +29,9 @@ import android.content.Context;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
-import android.os.ParcelUuid;
 import android.util.Log;
 
 import java.nio.ShortBuffer;
-import java.util.Random;
-import java.util.UUID;
-
-import static android.os.SystemClock.elapsedRealtimeNanos;
 
 public class BroadcastThread {
     // Logging
@@ -58,7 +53,6 @@ public class BroadcastThread {
 
         if (mBluetoothManager != null) {
             mBluetoothAdapter = mBluetoothManager.getAdapter();
-            mBluetoothAdapter.setName(Constants.DEV_NAME);
 
             Log.e(LOG_TAG, "BLUETOOTH ADDR: "+mBluetoothAdapter.getAddress());
             Log.e(LOG_TAG, "BLUETOOTH NAME: "+mBluetoothAdapter.getName());
@@ -130,7 +124,7 @@ public class BroadcastThread {
         android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO);
         int duration = 1; // seconds
 
-        int numSamples = (int)(.001 * Constants.SAMPLE_RATE);
+        int numSamples = (int)(.001 * Utils.SAMPLE_RATE);
         double sample[] = new double[numSamples];
         double freqOfTone = 21000; // hz
 
@@ -138,7 +132,7 @@ public class BroadcastThread {
 
         // fill out the array
         for (int i = 0; i < numSamples; ++i) {
-            sample[i] = Math.sin(2 * Math.PI * i / (Constants.SAMPLE_RATE/freqOfTone));
+            sample[i] = Math.sin(2 * Math.PI * i / (Utils.SAMPLE_RATE/freqOfTone));
         }
 
         // convert to 16 bit pcm sound array
@@ -153,7 +147,7 @@ public class BroadcastThread {
         }
 
         final AudioTrack audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC,
-                Constants.SAMPLE_RATE,
+                Utils.SAMPLE_RATE,
                 AudioFormat.CHANNEL_OUT_MONO,
                 AudioFormat.ENCODING_PCM_16BIT,
                 generatedSnd.length,
@@ -161,14 +155,14 @@ public class BroadcastThread {
 
         audioTrack.write(generatedSnd, 0, generatedSnd.length);
         audioTrack.play();
-        Constants.nanosecondsSinceAudioSent = System.nanoTime();
+        Utils.nanosecondsSinceAudioSent = System.nanoTime();
 
     }
 
     private void play_jni() {
-        Constants.nanosecondsSinceAudioSent = System.nanoTime();
+        Utils.nanosecondsSinceAudioSent = System.nanoTime();
         NativeBridge.StartPlayback();
-        Constants.beganPlayback = true;
+        Utils.beganPlayback = true;
     }
 
     private void play() {

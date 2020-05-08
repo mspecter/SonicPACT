@@ -9,10 +9,12 @@ import android.graphics.Path;
 import android.graphics.Picture;
 import android.graphics.Rect;
 import android.os.Build;
-import android.support.v4.content.ContextCompat;
+//import android.support.v4.content.ContextCompat;
 import android.text.TextPaint;
 import android.util.AttributeSet;
 import android.view.View;
+
+import androidx.core.content.ContextCompat;
 
 import com.MIT.waveform.utils.*;
 

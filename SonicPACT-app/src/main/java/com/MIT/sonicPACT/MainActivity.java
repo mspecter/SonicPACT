@@ -20,132 +20,161 @@ import android.bluetooth.BluetoothManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.media.AudioManager;
+import android.media.MicrophoneInfo;
+import android.os.Build;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
+/*import android.support.annotation.NonNull;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
+import android.support.design.widget.TextInputEditText;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.Toolbar;
+
+ */
 import android.util.Log;
+import android.util.Pair;
 import android.view.View;
-import android.view.Menu;
-import android.view.MenuItem;
+import android.widget.EditText;
 import android.widget.Toast;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import com.MIT.waveform.WaveformView;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.snackbar.Snackbar;
+
+import java.io.IOException;
 
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
 
+    // Views the waveform
     private WaveformView mRealtimeWaveformView;
+
+    // Threads
     private ListenThread mListenThread;
     private BroadcastThread mBroadcastThread;
+    private LeaderThread mLeaderThread;
+    private FollowerThread mFollowerThread;
+
+    // Bluetooth
     private BluetoothAdapter mBluetoothAdapter;
 
-    public static final int REQUEST_ENABLE_BT = 1;
+    // Enable Intent Static #'s
+    private static final int REQUEST_ENABLE_BT = 1;
     private static final int REQUEST_RECORD_AUDIO = 13;
+    private static final int REQUEST_LOC = 10;
 
-    private static final int REQUEST_LOC= 99999;
+    @RequiresApi(api = Build.VERSION_CODES.P)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Enable bluetooth
-        // Initializes Bluetooth adapter.
-        final BluetoothManager bluetoothManager =
-                (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        // Handle permissions etc
+        enableBluetooth();
+        requestLocationPermission();
 
-        mBluetoothAdapter = bluetoothManager.getAdapter();
-
-        showErrorText("Enabling bt");
-
-        // Is Bluetooth supported on this device?
-        if (mBluetoothAdapter != null) {
-
-            // Is Bluetooth turned on?
-            if (mBluetoothAdapter.isEnabled()) {
-
-                // Are Bluetooth Advertisements supported on this device?
-                if (mBluetoothAdapter.isMultipleAdvertisementSupported()) {
-
-                    // Everything is supported and enabled, load the fragments.
-                    showErrorText("BLUETOOTH ENABLED");
-
-                } else {
-
-                    // Bluetooth Advertisements are not supported.
-                    showErrorText("bt_ads_not_supported");
-                }
-            } else {
-
-                // Prompt user to turn on Bluetooth (logic continues in onActivityResult()).
-                Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-                startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
-            }
-        } else {
-            // Bluetooth is not supported.
-            showErrorText("Bluetooth Not Enabled");
-        }
         // Initialize the native audio callbacks for playback
         NativeBridge.InitPlaybackCallbacks();
         NativeBridge.InitRecordCallbacks();
-        //NativeBridge.StartRecord();
+
+        // Start recording chirps!
+        NativeBridge.StartRecord();
 
         setContentView(R.layout.activity_main);
 
-        Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
+        // Printing out various information
+        AudioManager myAudioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
+        try {
+            for(MicrophoneInfo info : myAudioManager.getMicrophones()){
+                Log.e(TAG, info.getDescription());
+                Log.e(TAG, "" + info.getId());
+                for (Pair<Float, Float> respones : info.getFrequencyResponse())
+                    Log.e(TAG, "response: freq = " + respones.first + ", db = " + respones.second);
+
+                Log.e(TAG, "END : "+ info.getDescription());
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         mRealtimeWaveformView = findViewById(R.id.waveformView);
+        mLeaderThread = new LeaderThread(mBluetoothAdapter);
+        mFollowerThread = new FollowerThread(mBluetoothAdapter);
+        final boolean[] isPlaying = {false};
 
-        // This starts the listener
-        mListenThread = new ListenThread(
-                new AudioDataReceivedListener() {
-                    @Override
-                    public void onAudioDataReceived(short[] data) {
-                        mRealtimeWaveformView.setSamples(data);
-                    }
-                }, mBluetoothAdapter);
+        final FloatingActionButton aButton = findViewById(R.id.aButton);
 
-        final WaveformView mPlaybackView = findViewById(R.id.playbackWaveformView);
-
-        FloatingActionButton fab = findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
+        aButton.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View view) {
-                if (!mListenThread.recording()) {
-                    startAudioRecordingSafe();
-                } else {
-                    mListenThread.stopRecording();
+            public void onClick(View v) {
+                if (isPlaying[0]) {
+                    isPlaying[0] = false;
+                    aButton.setImageResource(android.R.drawable.ic_media_play);
+
+                    if (Utils.IS_LEADER)
+                        mLeaderThread.stop();
+                    else
+                        mFollowerThread.stop();
+                }
+                else {
+                    isPlaying[0] = true;
+                    aButton.setImageResource(android.R.drawable.ic_media_pause);
+
+                    if (Utils.IS_LEADER)
+                        mLeaderThread.start();
+                    else
+                        mFollowerThread.start();
                 }
             }
         });
 
-        final FloatingActionButton playFab = findViewById(R.id.playFab);
+        final MaterialButton toggle  = findViewById(R.id.toggleButton);
+        final TextView roleTextLabel = findViewById(R.id.DevName);
+        toggle.setText("SWITCH TO FOLLOWER");
 
-        mBroadcastThread = new BroadcastThread(this.getApplicationContext());
+        toggle.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                EditText frequency = findViewById(R.id.Frequency);
+                if (!Utils.IS_LEADER) {
+                    mLeaderThread.stop();
+                    mFollowerThread.stop();
+                    isPlaying[0] = false;
 
-        mPlaybackView.setChannels(1);
-        mPlaybackView.setSampleRate(Constants.SAMPLE_RATE);
+                    Utils.IS_LEADER = true;
 
-        playFab.setOnClickListener(
-                new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        if (!mBroadcastThread.isPlaying()) {
-                            mBroadcastThread.startPlayback();
-                            playFab.setImageResource(android.R.drawable.ic_media_pause);
-                        }
-                        else {
-                            mBroadcastThread.stopPlayback();
-                            playFab.setImageResource(android.R.drawable.ic_media_play);
-                        }
-                    }
-                });
+                    toggle.setText("SWITCH TO FOLLOWER");
+                    roleTextLabel.setText("Currently Leader");
 
+                    aButton.setImageResource(android.R.drawable.ic_media_play);
+                    frequency.setText(""+ Utils.FREQ_LEADER);
+
+                } else {
+                    // stop the leader thread
+                    mLeaderThread.stop();
+                    mFollowerThread.stop();
+                    isPlaying[0] = false;
+
+                    Utils.IS_LEADER = false;
+
+                    roleTextLabel.setText("Currently Follower");
+                    toggle.setText("SWITCH TO LEADER");
+
+                    frequency.setText("" + Utils.FREQ_FOLLOWER);
+                    aButton.setImageResource(android.R.drawable.ic_media_play);
+                }
+            }
+        });
 
     }
 
@@ -155,10 +184,11 @@ public class MainActivity extends AppCompatActivity {
         switch (requestCode) {
             case REQUEST_ENABLE_BT:
                 if (resultCode == RESULT_OK) {
-                    if (mBluetoothAdapter.isMultipleAdvertisementSupported()) {
-                    } else {
+                    if (!mBluetoothAdapter.isMultipleAdvertisementSupported()) {
                         // Bluetooth Advertisements are not supported.
-                        showErrorText("bt_ads_not_supported");
+                        Toast.makeText(this, "We can't advertise!",
+                                Toast.LENGTH_SHORT).show();
+                        finish();
                     }
                 } else {
                     // User declined to enable Bluetooth, exit the app.
@@ -166,7 +196,6 @@ public class MainActivity extends AppCompatActivity {
                                     Toast.LENGTH_SHORT).show();
                     finish();
                 }
-
             default:
                 super.onActivityResult(requestCode, resultCode, data);
         }
@@ -179,8 +208,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStop() {
         super.onStop();
-        mListenThread.stopRecording();
-        mBroadcastThread.stopPlayback();
     }
 
     private void startAudioRecordingSafe() {
@@ -234,5 +261,36 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+
+    // Enables bluetooth
+    private void enableBluetooth(){
+        // Initializes Bluetooth adapter.
+        final BluetoothManager bluetoothManager =
+                (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+
+        mBluetoothAdapter = bluetoothManager.getAdapter();
+
+        Log.v(TAG, "Enabling BT");
+        // Is Bluetooth supported on this device?
+        if (mBluetoothAdapter != null) {
+            // Is Bluetooth turned on?
+            if (mBluetoothAdapter.isEnabled()) {
+                // Are Bluetooth Advertisements supported on this device?
+                if (mBluetoothAdapter.isMultipleAdvertisementSupported())
+                    // Everything is supported and enabled, load the fragments.
+                    Log.v(TAG, "BLUETOOTH ENABLED");
+                else
+                    // Bluetooth Advertisements are not supported.
+                    showErrorText("bt_ads_not_supported");
+            } else {
+                // Prompt user to turn on Bluetooth (logic continues in onActivityResult()).
+                Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+            }
+        } else {
+            // Bluetooth is not supported.
+            showErrorText("Bluetooth Not Enabled");
+        }
+    }
 
 }

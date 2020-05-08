@@ -23,39 +23,47 @@ public:
     }
 
     void startPlayback() {
-        //managedStream->requestStart();
-        this->shouldBroadcast=true;
-        while(!this->isBroadcasting){
-            std::chrono::nanoseconds timespan(1);
-            std::this_thread::sleep_for(timespan);
-        };
+        shouldBroadcast=true;
     }
 
     void stopPlayback() {
-        this->shouldBroadcast=false;
-        //managedStream->requestStop();
+        shouldBroadcast=false;
     }
 
     void closeStream() {
         managedStream->close();
     }
 
+    void setFrequency(double frequency) {
+        kFrequency = frequency;
+        updatePhaseIncrement();
+    };
+
+
     oboe::ManagedStream managedStream;
+    long lastBroadcastTime = 0;
 private:
     // Stream params
     // Keeps track of where the wave is
     float mPhase = 0.0;
+    float kFrequency = 15000;
+    std::atomic<float> mPhaseIncrement {kFrequency * kTwoPi /  kSampleRate};
+
     static int constexpr kChannelCount = 1;
     static int constexpr kSampleRate = 48000;
     // Wave params, these could be instance variables in order to modify at runtime
-    static float constexpr kAmplitude = 0.99f;
+    static float constexpr kAmplitude = 0.5f;
 //    static float constexpr kFrequency = 21000;
-    static float constexpr kFrequency = 15000;
     static float constexpr kPI = M_PI;
     static float constexpr kTwoPi = kPI * 2;
-    static double constexpr mPhaseIncrement = kFrequency * kTwoPi / (double) kSampleRate;
     bool shouldBroadcast = false;
     bool isBroadcasting = false;
+    float rampInc = .0001;
+    float currentAmp = .01;
+
+    void updatePhaseIncrement(){
+        mPhaseIncrement.store((kTwoPi * kFrequency) / kSampleRate);
+    };
 };
 
 static AudioGeneratorCallback toneGeneratorCallback;

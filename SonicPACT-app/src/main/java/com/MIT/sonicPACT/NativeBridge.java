@@ -16,4 +16,16 @@ public class NativeBridge {
     public static native long GetLastSpikeNS();
     public static native void StartRecord();
     public static native void StopRecord();
+
+    public static native void startAudioChirpAtInterval(int i);
+    public static native void stopAudioChirpAtInterval();
+    public static native void chirp();
+
+    public static native void setAudioListenFreq(double freq);
+
+    public static native void setAudioBroadcastFreq(double freq);
+
+    public static native long getLastChirpRecvTime();
+
+    public static native long getLastChirpSentTime();
 }

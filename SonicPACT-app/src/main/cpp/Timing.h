@@ -7,6 +7,7 @@
 
 static bool shouldTakeMeasure = false;
 static long nanosecondsStart = 0;
+static long CHIRP_LEN_NS = 20000000;
 
 
 #endif //SONICPACT_TIMING_H
