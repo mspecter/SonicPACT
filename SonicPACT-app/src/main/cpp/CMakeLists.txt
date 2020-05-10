@@ -15,7 +15,8 @@ add_library( # Sets the name of the library.
              SHARED
              native-lib.cpp
              AudioListener.cpp
-             AudoGenerator.cpp
+        AudoGenerator.cpp
+        AmpDetector.cpp
              kissfft/kiss_fft.c
              kissfft/tools/kiss_fftr.c
         )

@@ -26,7 +26,7 @@ bool AudioListenerCallback::isMagnitudeAboveNoise(int index, int compare1, int c
 oboe::DataCallbackResult
 AudioListenerCallback::do_fft_detect(void *audioData, int32_t numFrames) {
     short *shortdata = (short *) audioData;
-    uint64_t timestmp = getTimeNsec();
+    uint64_t timestmp = static_cast<uint64_t>(getTimeNsec());
 
     // Convert shorts to float and copy
     for (int i = 0; i < numFrames ; i++) {
@@ -63,6 +63,11 @@ AudioListenerCallback::do_fft_detect(void *audioData, int32_t numFrames) {
         lastSendingSpikeTime = timestmp;
     }
 }
+
+float ExpoAvg(float sample, float avg, float w) {
+    return w*sample + (1-w)*avg;
+}
+
 oboe::DataCallbackResult
 AudioListenerCallback::onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) {
     // performs the fft-based detection, which is a bit more...intense
@@ -71,14 +76,24 @@ AudioListenerCallback::onAudioReady(oboe::AudioStream *audioStream, void *audioD
         return do_fft_detect(audioData, numFrames);
     }*/
 
-    short *shortdata = (short *) audioData;
+    float *shortdata = (float *) audioData;
     uint64_t timestmp = getTimeNsec();
     // Complex resonator test
-
+    bool prevDifference;
+    float currentTotal = 0;
 
     // Convert shorts to float and copy
     for (int i = 0; i < numFrames; i++) {
-        float data = (float) shortdata[i];
+        float data = shortdata[i];
+        //__android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "RAW BUFFER DATA %llu, %f\n", timestmp, data);
+
+        //this->broadcastFreqDetector->update(data, static_cast<uint64_t>(i), timestmp);
+        //this->listenFreqDetector->update(data, i, timestmp);
+
+        if (this->dumpBuffer){
+            __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "RAW BUFFER DATA %f\n",
+                            data);
+        }
         ////////
         /// listening floats
         float iir_out_0_old = iir_out_0;
@@ -113,7 +128,71 @@ AudioListenerCallback::onAudioReady(oboe::AudioStream *audioStream, void *audioD
         broadcast_junk2_iir_out_0 = broadcast_iir_out_0_old * broadcast_junk2_pole_0 - broadcast_iir_out_1_old * broadcast_junk2_pole_1 + data;
         broadcast_junk2_iir_out_1 = broadcast_iir_out_0_old * broadcast_junk2_pole_1 - broadcast_iir_out_1_old * broadcast_junk2_pole_0;
 
+        ////
+        /// Edge Detect
+        float iir_mag = iir_out_0*iir_out_0 + iir_out_1*iir_out_1;
+
+        float iir_mag_max = .1;
+        if (iir_mag > iir_mag_max){
+            iir_out_0 = sqrtf(iir_mag_max/2);
+            iir_out_1 = sqrtf(iir_mag_max/2);
+            iir_mag = iir_out_0*iir_out_0 + iir_out_1*iir_out_1;
+        }
+        if (uninit){
+            fastAvg = iir_mag;
+            slowAvg = iir_mag;
+            uninit = false;
+        }
+        fastAvg = ExpoAvg(iir_mag, fastAvg, 0.025);
+        slowAvg = ExpoAvg(iir_mag, slowAvg, 0.0025);
+
+        float difference = fabs(fastAvg - slowAvg);
+        float threshold = .002;
+        //__android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "fastAvg %lu, %f, %d\n",
+        //                    timestmp, fastAvg, fast_avg_duration);
+        /*
+        __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "FAST_AVG %llu, %f\n",
+                            timestmp, fastAvg);
+
+        __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "SLOW_AVG %llu, %f\n",
+                            timestmp, slowAvg);
+        */
+
+        bool isEdge = prevDifference < threshold && difference >= threshold;
+        if (isEdge){
+            //__android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "FOUND EDGE AT TIME %lu, %f\n",
+            //                    timestmp, difference);
+        }
+        if(slowAvg > 0.00005){
+            fast_avg_duration ++;
+            currentTotal += slowAvg;
+            //__android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "fastAvg %lu, %f, %d\n",
+            //                    timestmp, fastAvg, fast_avg_duration);
+            //__android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "fastAvg %lu, %f, %d\n",
+            //                    timestmp, fastAvg, fast_avg_duration);
+            //if (fast_avg_duration == 900){
+            //    __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "fastAvg %lu, %f, %d\n",
+            //                       timestmp, fastAvg, fast_avg_duration);
+                //__android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT",
+                //        "Frequency %f, %lu, %f, %d\n", this->mListenFrequency,
+                //                    timestmp, fastAvg, fast_avg_duration);
+            //}
+
+        }
+        else {
+            if (fast_avg_duration > 1000 && fast_avg_duration < 3000)
+                __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "Threshold Lower %lu, %f, %d, %f\n",
+                                    timestmp, slowAvg, fast_avg_duration, currentTotal/fast_avg_duration);
+            fast_avg_duration = 0;
+        }
+        prevDifference = difference;
+
+
     }
+    this->broadcastFreqDetector->reset();
+    this->listenFreqDetector->reset();
+
+    dumpBuffer = false;
 
     float iir_mag = iir_out_0*iir_out_0 + iir_out_1*iir_out_1;
     float iir_noise_avg = (junk1_iir_out_0 * junk1_iir_out_0 + junk1_iir_out_1 * junk1_iir_out_1) +
@@ -121,9 +200,14 @@ AudioListenerCallback::onAudioReady(oboe::AudioStream *audioStream, void *audioD
 
     iir_noise_avg /= 2;
 
-    if (iir_mag-iir_noise_avg > 50000000){
+    //__android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "GOT IIR mag %f, at time %lu\n",
+    //                    iir_mag , timestmp);
+
+    if (iir_mag > 50000000){
+
         if (timestmp - lastListeningSpikeTime > 30000000) {// 30 ms
-            __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "GOT IIR mag %f, at time %lu", iir_mag, timestmp);
+            __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "GOT IIR mag %f, at time %lu\n",
+                    iir_mag , timestmp);
             lastListeningBroadcastTime = timestmp;
         }
         lastListeningSpikeTime = timestmp;
@@ -138,56 +222,57 @@ AudioListenerCallback::onAudioReady(oboe::AudioStream *audioStream, void *audioD
 
     broadcast_iir_noise_avg /= 2;
 
-    if (broadcast_iir_mag - broadcast_iir_noise_avg > 50000000){
+    if ( broadcast_iir_mag > 50000000){
         if (timestmp - lastSendingSpikeTime > 30000000) {// 30 ms
-            __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "GOT Broadcast IIR mag %f, at time %lu", iir_mag, timestmp);
+            __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "GOT Broadcast IIR mag %f, at time %lu", broadcast_iir_mag, timestmp);
             lastSendingBroadcastTime = timestmp;
         }
         lastSendingSpikeTime = timestmp;
     }
 
+
     return oboe::DataCallbackResult::Continue;
 }
 
-void AudioListenerCallback::setFrequency(double d) {
+void AudioListenerCallback::setFrequency(float d) {
     __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "UPDATING FREQ %f", d);
-    mListenFrequency = d;
+    mListenFrequency = static_cast<float>(d);
     index = (int)((double) (BUFFSIZE + 2) / kSampleRate * mListenFrequency);
     compare1 = (int)( (double) (BUFFSIZE + 2) / kSampleRate * (mListenFrequency - 1500));
     compare2 = (int)( (double) (BUFFSIZE + 2) / kSampleRate * (mListenFrequency + 1120));
 
-    iir_out_0 = 0.0f;
-    iir_out_1 = 0.0f;
-    angle = static_cast<float>(2.0f * M_PI * mListenFrequency / atten);
-    pole_0 = cosf(angle)*atten;
-    pole_1 = sinf(angle)*atten;
+    PI = 3.14159265358979323846f;
+    this->listenFreqDetector = new AmpDetector(static_cast<float>(d));
 
+    dumpBuffer = true;
 
     //////
     /// Floats for Listening frequency
     iir_out_0 = 0.0f;
     iir_out_1 = 0.0f;
-    angle = static_cast<float>(2.0f * M_PI * mListenFrequency / atten);
+    angle = 2.0f * PI * mListenFrequency / atten;
     pole_0 = cosf(angle)*atten;
     pole_1 = sinf(angle)*atten;
 
     junk1_iir_out_0 = 0.0f;
     junk1_iir_out_1 = 0.0f;
-    angle1 = static_cast<float>(2.0f * M_PI * mListenFrequency - 200 / atten);
+    angle1 = static_cast<float>(2.0f * M_PI * (mListenFrequency - 50) / atten);
     junk1_pole_0 = cosf(angle1)*atten;
     junk1_pole_1 = sinf(angle1)*atten;
 
     junk2_iir_out_0 = 0.0f;
     junk2_iir_out_1 = 0.0f;
-    angle2 = static_cast<float>(2.0f * M_PI * mListenFrequency + 150 / atten);
+    angle2 = static_cast<float>(2.0f * M_PI * (mListenFrequency + 50) / atten);
     junk2_pole_0 = cosf(angle2)*atten;
     junk2_pole_1 = sinf(angle2)*atten;
 
 }
 
-void AudioListenerCallback::setOwnFrequency(double d) {
+void AudioListenerCallback::setOwnFrequency(float d) {
     __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "UPDATING FREQ %f", d);
     mBroadcastFrequency = d;
+
+    this->broadcastFreqDetector = new AmpDetector(d);
     indexOwn = (int)((double) (BUFFSIZE + 2) / kSampleRate * mBroadcastFrequency);
     compareOwn1 = (int)( (double) (BUFFSIZE + 2) / kSampleRate * (mBroadcastFrequency - 1500));
     compareOwn2 = (int)( (double) (BUFFSIZE + 2) / kSampleRate * (mBroadcastFrequency + 1120));
@@ -202,13 +287,13 @@ void AudioListenerCallback::setOwnFrequency(double d) {
 
     broadcast_junk1_iir_out_0 = 0.0f;
     broadcast_junk1_iir_out_1 = 0.0f;
-    broadcast_angle1 = static_cast<float>(2.0f * M_PI * mBroadcastFrequency - 200 / atten);
+    broadcast_angle1 = static_cast<float>(2.0f * M_PI * (mBroadcastFrequency - 50) / atten);
     broadcast_junk1_pole_0 = cosf(broadcast_angle1)*atten;
     broadcast_junk1_pole_1 = sinf(broadcast_angle1)*atten;
 
     broadcast_junk2_iir_out_0 = 0.0f;
     broadcast_junk2_iir_out_1 = 0.0f;
-    broadcast_angle2 = static_cast<float>(2.0f * M_PI * mBroadcastFrequency + 150 / atten);
+    broadcast_angle2 = static_cast<float>(2.0f * M_PI * (mBroadcastFrequency + 50) / atten);
     broadcast_junk2_pole_0 = cosf(broadcast_angle2)*atten;
     broadcast_junk2_pole_1 = sinf(broadcast_angle2)*atten;
 }

@@ -58,8 +58,8 @@ public class LeaderThread {
     }
 
     private void run_protocol(){
-        NativeBridge.setAudioListenFreq(Utils.FREQ_FOLLOWER);
         NativeBridge.setAudioBroadcastFreq(Utils.FREQ_LEADER);
+        NativeBridge.setAudioListenFreq(Utils.FREQ_FOLLOWER);
 
         // Start a thread for chirping on a given interval:
         Thread chirpThread = new Thread(){

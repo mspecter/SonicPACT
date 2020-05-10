@@ -55,11 +55,11 @@ Java_com_MIT_sonicPACT_NativeBridge_InitRecordCallbacks(JNIEnv *env, jclass claz
     builder.setDirection(oboe::Direction::Input);
     builder.setPerformanceMode(oboe::PerformanceMode::LowLatency);
     builder.setSharingMode(oboe::SharingMode::Exclusive);
-    builder.setFormat(oboe::AudioFormat::I16);
+    builder.setFormat(oboe::AudioFormat::Float);
     // valid options for this device are 18 and 19. worth testing both?
     builder.setDeviceId(18);
     builder.setChannelCount(1);
-    //builder.setFramesPerCallback(BUFFSIZE);
+    builder.setFramesPerCallback(400);
     builder.setSampleRate(toneListenerCallback.kSampleRate);
     builder.setCallback(&toneListenerCallback);
 
@@ -143,12 +143,12 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_com_MIT_sonicPACT_NativeBridge_setAudioListenFreq(JNIEnv *env, jclass clazz, jdouble freq) {
     __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "UPDATING FREQ %f", (double)freq);
-    toneListenerCallback.setFrequency((double) freq);
+    toneListenerCallback.setFrequency(static_cast<float>((double) freq));
 }
 
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_MIT_sonicPACT_NativeBridge_setAudioBroadcastFreq(JNIEnv *env, jclass clazz, jdouble freq) {
     toneGeneratorCallback.setFrequency((double)freq);
-    toneListenerCallback.setOwnFrequency((double)freq);
+    toneListenerCallback.setOwnFrequency(static_cast<float>((double) freq));
 }

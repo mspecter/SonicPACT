@@ -47,6 +47,9 @@ AudioGeneratorCallback::onAudioReady(oboe::AudioStream *audioStream, void *audio
         // amplitude * sin(2 * pi * freq * i + phase)
         //floatData[i] = this->kAmplitude * sinf(mPhase);
         floatData[i] =  sinf(mPhase);
+
+        // TODO: Flipping the phase!!!
+
         mPhase += mPhaseIncrement;
         if (mPhase >= kTwoPi)
             mPhase -= kTwoPi;
