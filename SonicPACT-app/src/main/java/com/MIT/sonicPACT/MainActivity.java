@@ -20,6 +20,7 @@ import android.bluetooth.BluetoothManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.media.MicrophoneInfo;
 import android.os.Build;
@@ -52,6 +53,12 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
 
 import java.io.IOException;
+
+import static android.media.AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER;
+import static android.media.AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE;
+import static android.media.AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED;
+import static android.media.AudioManager.PROPERTY_SUPPORT_SPEAKER_NEAR_ULTRASOUND;
+import static android.media.AudioManager.PROPERTY_SUPPORT_MIC_NEAR_ULTRASOUND;
 
 
 public class MainActivity extends AppCompatActivity {
@@ -106,6 +113,28 @@ public class MainActivity extends AppCompatActivity {
         } catch (IOException e) {
             e.printStackTrace();
         }
+        try {
+            for(AudioDeviceInfo info : myAudioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)){
+
+                Log.e(TAG, "devname"+ info.getProductName());
+                for (int rate : info.getSampleRates())
+                    Log.e(TAG, "SAMPLERATE"+ rate);
+                Log.e(TAG, "SAMPLERATE"+ info.getSampleRates().length);
+
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        Log.e(TAG, "SAMPLERATE"+
+                myAudioManager.getProperty(PROPERTY_OUTPUT_SAMPLE_RATE));
+        Log.e(TAG, "SUPPORT ULTRASOUND SPEAKER"+
+                myAudioManager.getProperty(PROPERTY_SUPPORT_SPEAKER_NEAR_ULTRASOUND));
+        Log.e(TAG, "SUPPORT ULTRASOUND MIC"+
+                myAudioManager.getProperty(PROPERTY_SUPPORT_MIC_NEAR_ULTRASOUND));
+        Log.e(TAG, "SUPPORT SOUND UNPROC "+
+                myAudioManager.getProperty(PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED));
+        Log.e(TAG, "SOUND FRAMES PER BUFFER "+
+                myAudioManager.getProperty(PROPERTY_OUTPUT_FRAMES_PER_BUFFER));
 
         mRealtimeWaveformView = findViewById(R.id.waveformView);
         mLeaderThread = new LeaderThread(mBluetoothAdapter);

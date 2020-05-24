@@ -5,22 +5,28 @@
 
 cmake_minimum_required(VERSION 3.4.1)
 
+include_directories(native/jni/include)
+add_library( lib_opencv SHARED IMPORTED )
+set_target_properties(lib_opencv PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/native/libs/${ANDROID_ABI}/libopencv_java3.so)
+
+
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Ofast")
 # Creates and names a library, sets it as either STATIC
 # or SHARED, and provides the relative paths to its source code.
 # You can define multiple libraries, and CMake builds them for you.
 # Gradle automatically packages shared libraries with your APK.
 
 add_library( # Sets the name of the library.
-             native-lib
-             SHARED
-             native-lib.cpp
-             AudioListener.cpp
-        AudoGenerator.cpp
+        native-lib
+        SHARED
+        native-lib.cpp
+        AudioListener.cpp
+        AudioGenerator.cpp
+        BPSKSignalGenerator.cpp
         AmpDetector.cpp
-             kissfft/kiss_fft.c
-             kissfft/tools/kiss_fftr.c
+        kissfft/kiss_fft.c
+        kissfft/tools/kiss_fftr.c
         )
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Ofast")
 
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by
@@ -48,4 +54,5 @@ include_directories (${OBOE_DIR}/include
 target_link_libraries( # Specifies the target library.
                        native-lib
                        oboe
+                       lib_opencv
                        ${log-lib} )

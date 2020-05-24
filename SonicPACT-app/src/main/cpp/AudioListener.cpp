@@ -3,7 +3,13 @@
 //
 
 #include <android/log.h>
+#include <__locale>
 #include "AudioListener.h"
+//#include "Buffer.h"
+#include "readerwriterqueue/readerwriterqueue.h"
+#include "readerwriterqueue/atomicops.h"
+
+using namespace moodycamel;
 
 bool AudioListenerCallback::isMagnitudeAboveNoise(int index, int compare1, int compare2) {
 
@@ -36,7 +42,7 @@ AudioListenerCallback::do_fft_detect(void *audioData, int32_t numFrames) {
             break;
     }
 
-    // THe bufer may not be full
+    // THe bufer may not be isFull
     if (currentBufferIndx < BUFFSIZE)
         return oboe::DataCallbackResult::Continue;
 
@@ -70,14 +76,9 @@ float ExpoAvg(float sample, float avg, float w) {
 
 oboe::DataCallbackResult
 AudioListenerCallback::onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) {
-    // performs the fft-based detection, which is a bit more...intense
-    /*
-    if (useFFT){
-        return do_fft_detect(audioData, numFrames);
-    }*/
-
     float *shortdata = (float *) audioData;
     uint64_t timestmp = getTimeNsec();
+
     // Complex resonator test
     bool prevDifference;
     float currentTotal = 0;
@@ -85,10 +86,14 @@ AudioListenerCallback::onAudioReady(oboe::AudioStream *audioStream, void *audioD
     // Convert shorts to float and copy
     for (int i = 0; i < numFrames; i++) {
         float data = shortdata[i];
-        //__android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "RAW BUFFER DATA %llu, %f\n", timestmp, data);
+        // put into the buffer to be decoded by the decoder thread
+        //this->readerWriterQueue.enqueue(std::make_pair(timestmp, data));
+        __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "RAW BUFFER DATA %llu, %f\n", timestmp, data);
+        //broadcastFreqDetector->update(data, timestmp);
+        //listenFreqDetector->update(data, timestmp);
 
-        //this->broadcastFreqDetector->update(data, static_cast<uint64_t>(i), timestmp);
-        //this->listenFreqDetector->update(data, i, timestmp);
+        continue;
+        __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "RAW BUFFER DATA %llu, %f\n", timestmp, data);
 
         if (this->dumpBuffer){
             __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "RAW BUFFER DATA %f\n",
@@ -181,8 +186,8 @@ AudioListenerCallback::onAudioReady(oboe::AudioStream *audioStream, void *audioD
         }
         else {
             if (fast_avg_duration > 1000 && fast_avg_duration < 3000)
-                __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "Threshold Lower %lu, %f, %d, %f\n",
-                                    timestmp, slowAvg, fast_avg_duration, currentTotal/fast_avg_duration);
+                //__android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "Threshold Lower %lu, %f, %d, %f\n",
+                //                    timestmp, slowAvg, fast_avg_duration, currentTotal/fast_avg_duration);
             fast_avg_duration = 0;
         }
         prevDifference = difference;
@@ -191,8 +196,9 @@ AudioListenerCallback::onAudioReady(oboe::AudioStream *audioStream, void *audioD
     }
     this->broadcastFreqDetector->reset();
     this->listenFreqDetector->reset();
-
     dumpBuffer = false;
+    return oboe::DataCallbackResult::Continue;
+
 
     float iir_mag = iir_out_0*iir_out_0 + iir_out_1*iir_out_1;
     float iir_noise_avg = (junk1_iir_out_0 * junk1_iir_out_0 + junk1_iir_out_1 * junk1_iir_out_1) +
@@ -242,7 +248,9 @@ void AudioListenerCallback::setFrequency(float d) {
     compare2 = (int)( (double) (BUFFSIZE + 2) / kSampleRate * (mListenFrequency + 1120));
 
     PI = 3.14159265358979323846f;
-    this->listenFreqDetector = new AmpDetector(static_cast<float>(d));
+    this->listenFreqDetector = new AmpDetector(static_cast<float>(d), this->kSampleRate);
+
+    this->broadcastFreqDetector = new AmpDetector(d,kSampleRate);
 
     dumpBuffer = true;
 
@@ -272,7 +280,7 @@ void AudioListenerCallback::setOwnFrequency(float d) {
     __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "UPDATING FREQ %f", d);
     mBroadcastFrequency = d;
 
-    this->broadcastFreqDetector = new AmpDetector(d);
+    this->broadcastFreqDetector = new AmpDetector(d,kSampleRate);
     indexOwn = (int)((double) (BUFFSIZE + 2) / kSampleRate * mBroadcastFrequency);
     compareOwn1 = (int)( (double) (BUFFSIZE + 2) / kSampleRate * (mBroadcastFrequency - 1500));
     compareOwn2 = (int)( (double) (BUFFSIZE + 2) / kSampleRate * (mBroadcastFrequency + 1120));
@@ -296,6 +304,22 @@ void AudioListenerCallback::setOwnFrequency(float d) {
     broadcast_angle2 = static_cast<float>(2.0f * M_PI * (mBroadcastFrequency + 50) / atten);
     broadcast_junk2_pole_0 = cosf(broadcast_angle2)*atten;
     broadcast_junk2_pole_1 = sinf(broadcast_angle2)*atten;
+}
+
+/// The decoder thread reads from the ring buffer continuously to attempt to decode
+/// incoming messages
+void AudioListenerCallback::decoderThread() {
+    int result;
+    std::pair<uint64_t, float> item;
+
+    while (this->shouldContinueDecoding) {
+        this->readerWriterQueue.wait_dequeue(item);
+
+        //__android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT",
+        //                    "POPPED OFF: %f, %llu", item.second, item.first);
+    }
+
+
 }
 
 

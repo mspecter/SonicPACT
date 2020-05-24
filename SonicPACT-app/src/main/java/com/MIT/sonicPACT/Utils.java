@@ -23,7 +23,7 @@ public class Utils {
     public static long nanosecondsSinceAudioSent = 0;
 
     // Frequencies for both leader & follower
-    public static final double FREQ_LEADER   = 15000;
+    public static final double FREQ_LEADER   = 18000;
     public static final double FREQ_FOLLOWER = 18000;
 
     public static boolean beganPlayback = false;

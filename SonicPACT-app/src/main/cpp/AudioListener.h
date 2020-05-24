@@ -6,10 +6,14 @@
 #define SONICPACT_AUDIOLISTENER_H
 #include <oboe/Oboe.h>
 #include <math.h>
+#include <thread>
 
 #include "kissfft/tools/kiss_fftr.h"
 #include "kissfft/kiss_fft.h"
 #include "AmpDetector.h"
+#include "readerwriterqueue/readerwriterqueue.h"
+
+using namespace moodycamel;
 
 #define TONE_FREQ 21000; // hz
 
@@ -21,15 +25,20 @@ static int64_t getTimeNsec() {
     return (int64_t) now.tv_sec*1000000000LL + now.tv_nsec;
 }
 
+// Preamble for the char
+
 class AudioListenerCallback : public oboe::AudioStreamCallback {
 public:
     ~AudioListenerCallback(){
         closeStream();
     }
-    AudioListenerCallback(){
+    AudioListenerCallback():readerWriterQueue(48000){
         //cfg = (KissRealConfig *) malloc(sizeof(KissRealConfig));
         fft_config = kiss_fftr_alloc(BUFFSIZE, 0, 0, 0);
         fft_result = (kiss_fft_cpx *) malloc(sizeof(kiss_fft_cpx) * BUFFSIZE + 2);
+        // Spawns the thread that performs decoding of inputs
+
+        // 5 seconds of data stored up!
     }
     // override to handle AudioStreamCallbacks
     oboe::DataCallbackResult
@@ -57,6 +66,7 @@ public:
     oboe::ManagedStream managedStream;
     uint64_t lastListeningBroadcastTime = 0;
 
+    void decoderThread();
 
     void setFrequency(float d);
     void setOwnFrequency(float d);
@@ -68,11 +78,11 @@ private:
 
     // Last time we saw a spike
     uint64_t lastListeningSpikeTime = 0;
-    float mBroadcastFrequency = 14000;
-    float mListenFrequency = 15000;
+    float mBroadcastFrequency = 19000;
+    float mListenFrequency = 19000;
 
-    AmpDetector *listenFreqDetector    = new AmpDetector(mListenFrequency);
-    AmpDetector *broadcastFreqDetector = new AmpDetector(mBroadcastFrequency);
+    AmpDetector *listenFreqDetector    = new AmpDetector(mListenFrequency, kSampleRate);
+    AmpDetector *broadcastFreqDetector = new AmpDetector(mBroadcastFrequency, kSampleRate);
 
     /////////////////////////////////////////////////////////////////////////////////
     // IIR-based detection
@@ -147,6 +157,7 @@ private:
     int compare1 = (int)( (double) (BUFFSIZE + 2) / kSampleRate * (mListenFrequency - 500));
     int compare2 = (int)( (double) (BUFFSIZE + 2) / kSampleRate * (mListenFrequency + 300));
     float audiobuffer[BUFFSIZE+2] = {0};
+    BlockingReaderWriterQueue<std::pair<uint64_t, float>> readerWriterQueue;
 
     bool shouldTakeMeasure = true;
     uint64_t startNS = 0;
@@ -161,6 +172,7 @@ private:
     float last_pTAVG = 0;
 
     bool dumpBuffer = true;
+    bool shouldContinueDecoding = true;
 };
 
 static AudioListenerCallback toneListenerCallback;

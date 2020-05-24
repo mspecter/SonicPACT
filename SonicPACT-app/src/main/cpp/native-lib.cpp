@@ -1,12 +1,17 @@
 #include <jni.h>
 #include <string>
-#include "AudoGenerator.h"
+#include "AudioGenerator.h"
 #include "../../../../../oboe/src/common/OboeDebug.h"
 #include "AudioListener.h"
 #include "Timing.h"
-
+#include <opencv2/core/core.hpp>
 
 std::atomic<bool> shouldContinueChirpingAtInterval {true};
+using namespace cv;
+
+void test(){
+    cv::Mat data = cv::Mat::zeros(10, 1, CV_32F);
+}
 
 extern "C"
 JNIEXPORT void JNICALL
@@ -30,10 +35,10 @@ Java_com_MIT_sonicPACT_NativeBridge_InitPlaybackCallbacks(JNIEnv *env, jclass cl
     builder.setDirection(oboe::Direction::Output);
     builder.setPerformanceMode(oboe::PerformanceMode::LowLatency);
     builder.setSharingMode(oboe::SharingMode::Exclusive);
-    builder.setBufferCapacityInFrames(128);
+    //builder.setBufferCapacityInFrames(128);
     builder.setFormat(oboe::AudioFormat::Float);
     builder.setChannelCount(1);
-    builder.setSampleRate(48000);
+    builder.setSampleRate(SAMPLE_RATE);
     builder.setCallback(&toneGeneratorCallback);
     oboe::Result result = builder.openManagedStream(toneGeneratorCallback.managedStream);
     if (result != oboe::Result::OK) {
@@ -51,6 +56,8 @@ Java_com_MIT_sonicPACT_NativeBridge_InitPlaybackCallbacks(JNIEnv *env, jclass cl
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_MIT_sonicPACT_NativeBridge_InitRecordCallbacks(JNIEnv *env, jclass clazz) {
+
+    // Adding a signal handler for debugging
     oboe::AudioStreamBuilder builder;
     builder.setDirection(oboe::Direction::Input);
     builder.setPerformanceMode(oboe::PerformanceMode::LowLatency);
@@ -59,7 +66,7 @@ Java_com_MIT_sonicPACT_NativeBridge_InitRecordCallbacks(JNIEnv *env, jclass claz
     // valid options for this device are 18 and 19. worth testing both?
     builder.setDeviceId(18);
     builder.setChannelCount(1);
-    builder.setFramesPerCallback(400);
+    //builder.setFramesPerCallback(400);
     builder.setSampleRate(toneListenerCallback.kSampleRate);
     builder.setCallback(&toneListenerCallback);
 
@@ -93,6 +100,7 @@ Java_com_MIT_sonicPACT_NativeBridge_StopRecord(JNIEnv *env, jclass clazz) {
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_MIT_sonicPACT_NativeBridge_stopAudioChirpAtInterval(JNIEnv *env, jclass clazz) {
+    toneGeneratorCallback.stopPlayback();
     shouldContinueChirpingAtInterval = false;
 }
 
@@ -103,15 +111,21 @@ JNIEXPORT void JNICALL
 Java_com_MIT_sonicPACT_NativeBridge_startAudioChirpAtInterval(JNIEnv *env, jclass clazz, jint i) {
     // TODO: Add playback tuning to ensure the chirp happens every i ms
     std::chrono::milliseconds pause_between_chirp_starts(i);
-    std::chrono::nanoseconds chirp_duration(CHIRP_LEN_NS);
+    std::chrono::nanoseconds chirp_duration(CHIRP_LEN_NS*10 );
+    std::chrono::nanoseconds wait(1);
     shouldContinueChirpingAtInterval = true;
 
     while (shouldContinueChirpingAtInterval){
-        toneGeneratorCallback.startPlayback();
+        __android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "SENDING CHIRP!");
 
-        std::this_thread::sleep_for(chirp_duration);
+        toneGeneratorCallback.startPlayback();
+        while (!toneGeneratorCallback.has_broadcast_preamble)
+            std::this_thread::sleep_for(wait);
+
+        //std::this_thread::sleep_for(chirp_duration);
         toneGeneratorCallback.stopPlayback();
-        std::this_thread::sleep_for(pause_between_chirp_starts - chirp_duration);
+        std::this_thread::sleep_for(pause_between_chirp_starts);
+        //std::this_thread::sleep_for(pause_between_chirp_starts - chirp_duration);
     }
 
 }
