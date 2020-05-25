@@ -9,9 +9,9 @@
 #include <stdio.h>
 #include <fstream>
 #include <chrono>
+#include <android/log.h>
 
-using namespace std;
-using namespace cv;
+
 
 float clamp(float x, float lowerlimit, float upperlimit) {
     if (x < lowerlimit)
@@ -31,29 +31,30 @@ float smootherstep(float edge0, float edge1, float x) {
 std::vector<float> GenerateBPSKPreamble(float carrier_frequency) {
     std::vector<float> wave;
 
-    uint64_t current_bit_index = 0;
-    uint64_t current_bit = PREAMBLE[0];
     uint64_t current_index_into_symbol = 0;
-
-    float transition_time = 0;
-    bool new_symbol      = true;
-    bool should_ramp     = true;
+    uint64_t current_bit_index         = 0;
+    uint64_t current_bit               = PREAMBLE[0];
 
     float message_i = 0;
     float message_q = 0;
-    float new_i     = 0;
+    float new_i     = 1;
 
     if (current_bit)
         new_i = 1;
     else
         new_i = -1;
 
-    float mPhase = 0;
-    float mPhaseIncrement = ((float)(M_PI) * 2 * carrier_frequency) / SAMPLE_RATE;
+    float transition_time = 0;
+    bool new_symbol  = true;
+    bool should_ramp = true;
+
+    float phase = 0;
+    float phaseIncrement = ((float)(M_PI) * 2 * carrier_frequency) / SAMPLE_RATE;
+
     bool keep_going = true;
 
     // set up wave to match against
-    while (keep_going){
+    while(keep_going){
 
         // Updates i & q values
         if (!new_symbol)
@@ -67,10 +68,9 @@ std::vector<float> GenerateBPSKPreamble(float carrier_frequency) {
             transition_time  = 0;
 
             if (current_bit_index >= PREAMBLE_LEN){
-                //current_bit_index  = 0;
                 new_symbol = true;
                 should_ramp = true;
-                current_bit = PREAMBLE[current_bit_index];
+                //current_bit = PREAMBLE[current_bit_index];
                 new_i = 0;
             }
             else if (PREAMBLE[current_bit_index] != current_bit){
@@ -100,8 +100,8 @@ std::vector<float> GenerateBPSKPreamble(float carrier_frequency) {
                     float direction = message_i * -1;
                     current_i += smootherstep(0, 1, 1 / SAMPLES_PER_TRANSITION * transition_time) * direction;
                     if (fabs(current_i) < .0001)
-                        // We've ramped down to zero, this only happens when we're finished
                         keep_going = false;
+
                 }
 
             }
@@ -109,9 +109,9 @@ std::vector<float> GenerateBPSKPreamble(float carrier_frequency) {
                 // Ramps from -1 to 1 or 1 to -1
                 current_i += smootherstep(0, 1, 1 / SAMPLES_PER_TRANSITION * transition_time) * 2 * new_i;
 
-            if (current_i >= 1)
+            if ( current_i>= 1)
                 current_i= 1;
-            if (current_i<= -1)
+            if ( current_i<= -1)
                 current_i= -1;
 
             transition_time++;
@@ -126,11 +126,15 @@ std::vector<float> GenerateBPSKPreamble(float carrier_frequency) {
         }
 
         // actual modulation!
-        wave.push_back(current_i * cosf(mPhase) + message_q * sinf(mPhase));
+        wave.push_back(current_i * cosf(phase) + message_q * sinf(phase));
+        //__android_log_print(ANDROID_LOG_ERROR, "NATIVE_PACT", "RAW BUFFER DATA %f\n",
+        //                    current_i * cosf(phase));
 
         // Increment current phase
-        mPhase += mPhaseIncrement;
-        if (mPhase >= 2*(float)M_PI)
-            mPhase -= 2*(float)M_PI;
+        phase += phaseIncrement;
+        if (phase >= 2 * (float)M_PI)
+            phase -= 2 * (float)M_PI;
     }
+
+    return wave;
 }

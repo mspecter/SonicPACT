@@ -12,6 +12,8 @@
 #include "kissfft/kiss_fft.h"
 #include "AmpDetector.h"
 #include "readerwriterqueue/readerwriterqueue.h"
+#include "Timing.h"
+#include "MatchedFilterDetector.h"
 
 using namespace moodycamel;
 
@@ -19,11 +21,6 @@ using namespace moodycamel;
 
 #define BUFFSIZE 256
 
-static int64_t getTimeNsec() {
-    struct timespec now;
-    clock_gettime(CLOCK_BOOTTIME, &now);
-    return (int64_t) now.tv_sec*1000000000LL + now.tv_nsec;
-}
 
 // Preamble for the char
 
@@ -32,13 +29,13 @@ public:
     ~AudioListenerCallback(){
         closeStream();
     }
-    AudioListenerCallback():readerWriterQueue(48000){
-        //cfg = (KissRealConfig *) malloc(sizeof(KissRealConfig));
-        fft_config = kiss_fftr_alloc(BUFFSIZE, 0, 0, 0);
-        fft_result = (kiss_fft_cpx *) malloc(sizeof(kiss_fft_cpx) * BUFFSIZE + 2);
-        // Spawns the thread that performs decoding of inputs
 
-        // 5 seconds of data stored up!
+    AudioListenerCallback(){
+        //cfg = (KissRealConfig *) malloc(sizeof(KissRealConfig));
+        //fft_config = kiss_fftr_alloc(BUFFSIZE, 0, 0, 0);
+        //fft_result = (kiss_fft_cpx *) malloc(sizeof(kiss_fft_cpx) * BUFFSIZE + 2);
+
+        // generate the matched listener
     }
     // override to handle AudioStreamCallbacks
     oboe::DataCallbackResult
@@ -61,15 +58,12 @@ public:
         shouldTakeMeasure = true;
     }
 
-    void getFFT(float* src, float* dest);
 
     oboe::ManagedStream managedStream;
     uint64_t lastListeningBroadcastTime = 0;
 
-    void decoderThread();
-
-    void setFrequency(float d);
-    void setOwnFrequency(float d);
+    void setFrequency(float frequency);
+    void setOwnFrequency(float frequency);
 
     static int constexpr kSampleRate = 48000;
 private:
@@ -78,101 +72,19 @@ private:
 
     // Last time we saw a spike
     uint64_t lastListeningSpikeTime = 0;
-    float mBroadcastFrequency = 19000;
-    float mListenFrequency = 19000;
+    float mBroadcastFrequency = 18000;
+    float mListenFrequency = 18000;
 
     AmpDetector *listenFreqDetector    = new AmpDetector(mListenFrequency, kSampleRate);
     AmpDetector *broadcastFreqDetector = new AmpDetector(mBroadcastFrequency, kSampleRate);
 
-    /////////////////////////////////////////////////////////////////////////////////
-    // IIR-based detection
-    uint64_t lastSendingSpikeTime;
-    uint64_t lastSendingBroadcastTime;
+    MatchedFilterDetector *detector = new MatchedFilterDetector(mListenFrequency, kSampleRate);
 
-
-    bool uninit = true;
-
-
-    //////
-    /// Floats for Listening frequency
-    float slowAvg = -100000;
-    float fastAvg = -100000;
-
-    uint64_t fast_avg_duration = 0;
-
-    float iir_out_0 = 0.0f;
-    float iir_out_1 = 0.0f;
-
-    // impulse control?
-    float atten = .0005f;
-    float angle = static_cast<float>(2.0f * M_PI * mListenFrequency / atten);
-    float pole_0 = cosf(angle)*atten;
-    float pole_1 = sinf(angle)*atten;
-
-    float junk1_iir_out_0 = 0.0f;
-    float junk1_iir_out_1 = 0.0f;
-    float angle1 = static_cast<float>(2.0f * M_PI * mListenFrequency - 200 / atten);
-    float junk1_pole_0 = cosf(angle1)*atten;
-    float junk1_pole_1 = sinf(angle1)*atten;
-
-    float junk2_iir_out_0 = 0.0f;
-    float junk2_iir_out_1 = 0.0f;
-    float angle2 = static_cast<float>(2.0f * M_PI * mListenFrequency + 150 / atten);
-    float junk2_pole_0 = cosf(angle2)*atten;
-    float junk2_pole_1 = sinf(angle2)*atten;
-
-    //////
-    /// Floats for Broadcast frequency
-
-    float broadcast_iir_out_0 = 0.0f;
-    float broadcast_iir_out_1 = 0.0f;
-    float broadcast_angle = static_cast<float>(2.0f * M_PI * mBroadcastFrequency / atten);
-    float broadcast_pole_0 = cosf(broadcast_angle)*atten;
-    float broadcast_pole_1 = sinf(broadcast_angle)*atten;
-
-    float broadcast_junk1_iir_out_0 = 0.0f;
-    float broadcast_junk1_iir_out_1 = 0.0f;
-    float broadcast_angle1 = static_cast<float>(2.0f * M_PI * mBroadcastFrequency - 200 / atten);
-    float broadcast_junk1_pole_0 = cosf(broadcast_angle1)*atten;
-    float broadcast_junk1_pole_1 = sinf(broadcast_angle1)*atten;
-
-    float broadcast_junk2_iir_out_0 = 0.0f;
-    float broadcast_junk2_iir_out_1 = 0.0f;
-    float broadcast_angle2 = static_cast<float>(2.0f * M_PI * mBroadcastFrequency + 150 / atten);
-    float broadcast_junk2_pole_0 = cosf(broadcast_angle2)*atten;
-    float broadcast_junk2_pole_1 = sinf(broadcast_angle2)*atten;
-
-    /////////////////////////////////////////////////////////////////////////////////
-    // FFT-based detection
-    bool useFFT = false;
-    int64_t currentBufferIndx = 0;
-    kiss_fft_cpx *fft_result;
-    kiss_fftr_cfg fft_config;
-    int indexOwn;
-    int compareOwn1;
-    int compareOwn2;
-
-    // Wave params, these could be instance variables in order to modify at runtime
-    int index = (int)((double) (BUFFSIZE + 2) / kSampleRate * mListenFrequency);
-    int compare1 = (int)( (double) (BUFFSIZE + 2) / kSampleRate * (mListenFrequency - 500));
-    int compare2 = (int)( (double) (BUFFSIZE + 2) / kSampleRate * (mListenFrequency + 300));
-    float audiobuffer[BUFFSIZE+2] = {0};
-    BlockingReaderWriterQueue<std::pair<uint64_t, float>> readerWriterQueue;
 
     bool shouldTakeMeasure = true;
     uint64_t startNS = 0;
-    bool isMagnitudeAboveNoise(int index, int compare1, int compare2);
-    double getMagnitudeAboveNoise(int index, int compare1, int compare2);
-    oboe::DataCallbackResult do_fft_detect(void *audioData, int32_t numFrames);
 
-    float PI = 3.14159265358979323846f;
-    int threshold_count =0;
-    float last_LTAVG=0.0f;
-    float last_QTAVG=0.0f;
-    float last_pTAVG = 0;
-
-    bool dumpBuffer = true;
-    bool shouldContinueDecoding = true;
+    bool dumpBuffer = false;
 };
 
 static AudioListenerCallback toneListenerCallback;

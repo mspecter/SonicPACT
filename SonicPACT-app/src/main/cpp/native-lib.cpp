@@ -1,7 +1,7 @@
 #include <jni.h>
 #include <string>
 #include "AudioGenerator.h"
-#include "../../../../../oboe/src/common/OboeDebug.h"
+#include "Logging.h"
 #include "AudioListener.h"
 #include "Timing.h"
 #include <opencv2/core/core.hpp>
@@ -121,6 +121,8 @@ Java_com_MIT_sonicPACT_NativeBridge_startAudioChirpAtInterval(JNIEnv *env, jclas
         toneGeneratorCallback.startPlayback();
         while (!toneGeneratorCallback.has_broadcast_preamble)
             std::this_thread::sleep_for(wait);
+
+        LOGE("CHIRP SENT AT %llu", toneGeneratorCallback.lastBroadcastTimestamp);
 
         //std::this_thread::sleep_for(chirp_duration);
         toneGeneratorCallback.stopPlayback();

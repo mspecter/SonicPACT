@@ -4,10 +4,9 @@
 # Sets the minimum version of CMake required to build the native library.
 
 cmake_minimum_required(VERSION 3.4.1)
+include(ndk-stl-config.cmake)
+#include_directories(native/jni/include)
 
-include_directories(native/jni/include)
-add_library( lib_opencv SHARED IMPORTED )
-set_target_properties(lib_opencv PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/native/libs/${ANDROID_ABI}/libopencv_java3.so)
 
 
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Ofast")
@@ -23,6 +22,7 @@ add_library( # Sets the name of the library.
         AudioListener.cpp
         AudioGenerator.cpp
         BPSKSignalGenerator.cpp
+        MatchedFilterDetector.cpp
         AmpDetector.cpp
         kissfft/kiss_fft.c
         kissfft/tools/kiss_fftr.c
@@ -46,13 +46,27 @@ find_library( # Sets the name of the path variable.
 # build script, prebuilt third-party libraries, or system libraries.
 set (OBOE_DIR ../../../../../oboe)
 add_subdirectory (${OBOE_DIR} ./oboe)
+
+set(OpenCV_DIR "../../../../../OpenCV-android-sdk-4.3.0/sdk/native/jni" )
+set(OpenCV_STATIC ON)
+find_package( OpenCV REQUIRED )
+
+message(STATUS "OpenCV libraries: ${OpenCV_LIBS}")
+message(STATUS ${OpenCV_VERSION})
 include_directories (${OBOE_DIR}/include
+        ${OpenCV_INCLUDE_DIRS}
         kissfft
         kissfft/tools
         )
 
 target_link_libraries( # Specifies the target library.
-                       native-lib
-                       oboe
-                       lib_opencv
-                       ${log-lib} )
+        native-lib
+        oboe
+        ${OpenCV_LIBS}
+        ${log-lib} )
+
+get_target_property(__src opencv_java IMPORTED_LOCATION_RELEASE )
+add_custom_command(TARGET native-lib POST_BUILD COMMAND
+        ${CMAKE_COMMAND} -E copy ${__src} ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+        )
+
