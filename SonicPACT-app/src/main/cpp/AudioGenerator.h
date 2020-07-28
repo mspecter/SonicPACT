@@ -10,6 +10,7 @@
 #include <Constants.h>
 #include "Timing.h"
 #include "BPSKSignalGenerator.h"
+#include "RandomNoise.h"
 
 class AudioGeneratorCallback : public oboe::AudioStreamCallback {
 public:
@@ -45,7 +46,18 @@ public:
         shouldBroadcast = false;
 
         kFrequency = static_cast<float>(frequency);
-        generated_wave = GenerateBPSKPreamble(kFrequency);
+        //generated_wave = GenerateBPSKPreamble(kFrequency);
+        //generated_wave = GenerateRandom("leader");
+        updatePhaseIncrement();
+    };
+
+    void setLeader(bool isLeader) {
+        shouldBroadcast = false;
+        if (isLeader)
+            generated_wave = GenerateRandom("follower");
+        else
+            generated_wave = GenerateRandom("leader");
+
         updatePhaseIncrement();
     };
 
@@ -54,7 +66,7 @@ public:
 
     long lastBroadcastTime = 0;
     bool has_broadcast_preamble = false;
-    uint64_t lastBroadcastTimestamp = 0;
+    uint64_t last_broadcast_sent = 0;
 
     std::atomic<float> mPhaseIncrement {kFrequency * kTwoPi /  SAMPLE_RATE};
 
@@ -63,7 +75,7 @@ private:
     float kFrequency = 18000.0;
     int current_index = 0;
 
-    std::vector<float> generated_wave = GenerateBPSKPreamble(kFrequency);
+    std::vector<float> generated_wave = GenerateRandom("follower");
 
     bool shouldBroadcast = false;
     bool isBroadcasting = false;
@@ -77,7 +89,6 @@ private:
 
 };
 
-static AudioGeneratorCallback toneGeneratorCallback;
 
 #define SONICPACT_AUDOGENERATOR_H
 

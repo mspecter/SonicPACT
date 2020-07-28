@@ -23,6 +23,7 @@ add_library( # Sets the name of the library.
         AudioGenerator.cpp
         BPSKSignalGenerator.cpp
         MatchedFilterDetector.cpp
+        RandomNoise.cpp
         AmpDetector.cpp
         kissfft/kiss_fft.c
         kissfft/tools/kiss_fftr.c

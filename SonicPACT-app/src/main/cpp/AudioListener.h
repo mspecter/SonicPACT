@@ -30,22 +30,17 @@ public:
         closeStream();
     }
 
-    AudioListenerCallback(){
-        //cfg = (KissRealConfig *) malloc(sizeof(KissRealConfig));
-        //fft_config = kiss_fftr_alloc(BUFFSIZE, 0, 0, 0);
-        //fft_result = (kiss_fft_cpx *) malloc(sizeof(kiss_fft_cpx) * BUFFSIZE + 2);
-
-        // generate the matched listener
-    }
     // override to handle AudioStreamCallbacks
     oboe::DataCallbackResult
     onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames);
 
     void startRecord() {
+        stopped = false;
         managedStream->requestStart();
     }
 
     void stopRecord() {
+        stopped = true;
         managedStream->requestStop();
     }
 
@@ -54,38 +49,46 @@ public:
     }
 
     void beginTimer() {
-        startNS = getTimeNsec();
         shouldTakeMeasure = true;
     }
 
 
     oboe::ManagedStream managedStream;
-    uint64_t lastListeningBroadcastTime = 0;
+    uint64_t last_broadcast_seen = 0;
+    uint64_t last_recv_seen = 0;
 
     void setFrequency(float frequency);
     void setOwnFrequency(float frequency);
+
+    void setIsLeader(bool isLeader){
+
+        if (this == nullptr)
+            LOGE("wat");
+
+        //this->stopped = true;
+        if (detector == nullptr)
+            LOGE("SOMETHING HAS GONE HORRIBLY WRONG");
+        else
+            detector->setIsLeader(isLeader);
+        //startRecord();
+    }
 
     static int constexpr kSampleRate = 48000;
 private:
 
     static int constexpr kChannelCount = 1;
+    std::mutex detectorMTX;
 
     // Last time we saw a spike
-    uint64_t lastListeningSpikeTime = 0;
     float mBroadcastFrequency = 18000;
     float mListenFrequency = 18000;
 
-    AmpDetector *listenFreqDetector    = new AmpDetector(mListenFrequency, kSampleRate);
-    AmpDetector *broadcastFreqDetector = new AmpDetector(mBroadcastFrequency, kSampleRate);
 
-    MatchedFilterDetector *detector = new MatchedFilterDetector(mListenFrequency, kSampleRate);
+    MatchedFilterDetector *detector = new MatchedFilterDetector(kSampleRate, true);
 
-
-    bool shouldTakeMeasure = true;
-    uint64_t startNS = 0;
 
     bool dumpBuffer = false;
+    bool stopped = false;
 };
 
-static AudioListenerCallback toneListenerCallback;
 #endif //SONICPACT_AUDIOLISTENER_H

@@ -57,8 +57,9 @@ public class FollowerThread {
     }
 
     private void run_protocol(){
-        NativeBridge.setAudioListenFreq(Utils.FREQ_LEADER);
-        NativeBridge.setAudioBroadcastFreq(Utils.FREQ_FOLLOWER);
+        //NativeBridge.setAudioListenFreq(Utils.FREQ_LEADER);
+        //NativeBridge.setAudioBroadcastFreq(Utils.FREQ_FOLLOWER);
+        //NativeBridge.setLeader(false);
 
         long last_recv_chirp_time = 0;
 

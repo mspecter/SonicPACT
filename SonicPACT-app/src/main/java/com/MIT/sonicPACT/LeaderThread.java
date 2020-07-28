@@ -3,6 +3,8 @@ package com.MIT.sonicPACT;
 import android.bluetooth.BluetoothAdapter;
 import android.util.Log;
 
+import static com.MIT.sonicPACT.NativeBridge.setLeader;
+
 public class LeaderThread {
     // The leader will emit a chirp every N seconds to start the protocol
 
@@ -17,6 +19,7 @@ public class LeaderThread {
     }
 
     public void start() {
+        NativeBridge.setLeader(true);
         btHandler.updateName(Utils.DEV_NAME_LEADER);
         shouldContinue = true;
         Thread broadcastThread = new Thread(new Runnable() {
@@ -41,7 +44,6 @@ public class LeaderThread {
                 run_protocol();
             }
         });
-
         mThread.start();
     }
 
@@ -58,8 +60,8 @@ public class LeaderThread {
     }
 
     private void run_protocol(){
-        NativeBridge.setAudioBroadcastFreq(Utils.FREQ_LEADER);
-        NativeBridge.setAudioListenFreq(Utils.FREQ_FOLLOWER);
+        //NativeBridge.setAudioBroadcastFreq(Utils.FREQ_LEADER);
+        //NativeBridge.setAudioListenFreq(Utils.FREQ_FOLLOWER);
 
         // Start a thread for chirping on a given interval:
         Thread chirpThread = new Thread(){
@@ -75,7 +77,7 @@ public class LeaderThread {
 
         long last_recv_chirp_time = 0;
 
-        while(shouldContinue){
+        while (shouldContinue) {
             // check if there's a new chirp from the follower
             long new_recv_chirp_time = NativeBridge.getLastChirpRecvTime();
             if (new_recv_chirp_time - last_recv_chirp_time > 1000000) { // Ten miliseconds
@@ -93,7 +95,6 @@ public class LeaderThread {
                 long result = last_sent_chirp_time - new_recv_chirp_time;
                 result *= -1;
                 Log.d(TAG, "distance = " + result);
-                /*
 
                 // update bluetooth with t4-t1
                 btHandler.updatePayload(Utils.longToBytes(result));
@@ -108,7 +109,6 @@ public class LeaderThread {
 
                 Log.d(TAG, "distance = " + ((result - bluetoothresult - 7600000*4) / 2)/100000.0);
 
-                 */
                 // update last recv time
                 last_recv_chirp_time = new_recv_chirp_time;
             }

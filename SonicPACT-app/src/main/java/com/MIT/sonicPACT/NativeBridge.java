@@ -28,4 +28,8 @@ public class NativeBridge {
     public static native long getLastChirpRecvTime();
 
     public static native long getLastChirpSentTime();
+
+    public static native long getLastChirpDelayNS();
+
+    public static native long setLeader(boolean isLeader);
 }

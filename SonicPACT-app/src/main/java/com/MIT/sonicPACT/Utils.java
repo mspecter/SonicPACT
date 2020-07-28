@@ -24,7 +24,7 @@ public class Utils {
 
     // Frequencies for both leader & follower
     public static final double FREQ_LEADER   = 18000;
-    public static final double FREQ_FOLLOWER = 18000;
+    public static final double FREQ_FOLLOWER = 19000;
 
     public static boolean beganPlayback = false;
 
