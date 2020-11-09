@@ -59,34 +59,45 @@ public class FollowerThread {
     private void run_protocol(){
         //NativeBridge.setAudioListenFreq(Utils.FREQ_LEADER);
         //NativeBridge.setAudioBroadcastFreq(Utils.FREQ_FOLLOWER);
-        //NativeBridge.setLeader(false);
+        NativeBridge.setLeader(false);
 
         long last_recv_chirp_time = 0;
 
         while(shouldContinue){
             // check if there's a new chirp from the follower
+
+            // End of the recv broadcast as heard from the mic
             long new_recv_chirp_time = NativeBridge.getLastChirpRecvTime();
             if (new_recv_chirp_time - last_recv_chirp_time > 1000000) { // Ten miliseconds
                 // We got a new chirp! Respond!
-                try {
-                    Thread.sleep(5);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+
+                // End of the sent broadcast as heard from the mic
+                long current_chirp = NativeBridge.getLastChirpSentTime();
+                long last_sent_chirp_time = current_chirp;
                 NativeBridge.chirp();
-                long last_sent_chirp_time = NativeBridge.getLastChirpSentTime();
+
+                // Wait until the chirp finishes
+                while (last_sent_chirp_time == current_chirp){
+                    try {
+                        Thread.sleep(1);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    last_sent_chirp_time = NativeBridge.getLastChirpSentTime();
+                }
 
                 // T2 = when it heard the chirp from the Leader
                 // T3 = when it replied
-                long result = new_recv_chirp_time - last_sent_chirp_time;
-                result *= -1;
+                //long result = new_recv_chirp_time - last_sent_chirp_time;
+                //long twiddle = NativeBridge.getLastChirpDelayNS() / 3;
+                long twiddle = 0;
+                long result = (last_sent_chirp_time+twiddle) - new_recv_chirp_time;
 
                 btHandler.updatePayload(Utils.longToBytes(result));
 
                 // update last recv time
                 last_recv_chirp_time = new_recv_chirp_time;
             }
-            //Log.d(TAG, "LeaderThread running!");
 
             try {
                 Thread.sleep(1);

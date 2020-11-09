@@ -29,13 +29,13 @@ public:
     void startPlayback() {
         current_index   = 0;
         shouldBroadcast = true;
-        has_broadcast_preamble = false;
+        hasFinishedBroadcasting = false;
     }
 
     void stopPlayback() {
         current_index   = 0;
         shouldBroadcast = false;
-        has_broadcast_preamble = false;
+        hasFinishedBroadcasting = false;
     }
 
     void closeStream() {
@@ -52,11 +52,17 @@ public:
     };
 
     void setLeader(bool isLeader) {
+        std::chrono::nanoseconds wait(1);
         shouldBroadcast = false;
+
+        // ensure that we're no longer broadcasting
+        while(isBroadcasting)
+            std::this_thread::sleep_for(wait);
+
         if (isLeader)
-            generated_wave = GenerateRandom("follower");
-        else
             generated_wave = GenerateRandom("leader");
+        else
+            generated_wave = GenerateRandom("follower");
 
         updatePhaseIncrement();
     };
@@ -64,8 +70,7 @@ public:
 
     oboe::ManagedStream managedStream;
 
-    long lastBroadcastTime = 0;
-    bool has_broadcast_preamble = false;
+    bool hasFinishedBroadcasting = false;
     uint64_t last_broadcast_sent = 0;
 
     std::atomic<float> mPhaseIncrement {kFrequency * kTwoPi /  SAMPLE_RATE};
@@ -75,7 +80,7 @@ private:
     float kFrequency = 18000.0;
     int current_index = 0;
 
-    std::vector<float> generated_wave = GenerateRandom("follower");
+    std::vector<float> generated_wave = GenerateRandom("leader");
 
     bool shouldBroadcast = false;
     bool isBroadcasting = false;

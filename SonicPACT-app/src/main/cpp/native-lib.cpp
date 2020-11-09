@@ -11,7 +11,7 @@ using namespace cv;
 std::atomic<bool> shouldContinueChirpingAtInterval {true};
 std::atomic<bool> isCurrentlyLeader {true};
 
-uint64_t chirp_delay;
+static uint64_t chirp_delay;
 
 static AudioListenerCallback* toneListenerCallback = nullptr;
 static AudioGeneratorCallback* toneGeneratorCallback = nullptr;
@@ -124,22 +124,43 @@ JNIEXPORT void JNICALL
 Java_com_MIT_sonicPACT_NativeBridge_startAudioChirpAtInterval(JNIEnv *env, jclass clazz, jint i) {
     LOGE("AUDIO CHIRP INT");
     // TODO: Add playback tuning to ensure the chirp happens every i ms
-    std::chrono::milliseconds pause_between_chirp_starts(i);
+    std::chrono::milliseconds pause_between_chirp_starts(i*2);
     std::chrono::nanoseconds chirp_duration(CHIRP_LEN_NS*10 );
     std::chrono::nanoseconds wait(1);
     shouldContinueChirpingAtInterval = true;
+    std::chrono::milliseconds one(1 );
 
-    while ( shouldContinueChirpingAtInterval ) {
-        LOGE("CHIRP DELAY:%f",
-             (toneListenerCallback->last_broadcast_seen - toneGeneratorCallback->last_broadcast_sent) / double(1e+6)/2 );
+    while (shouldContinueChirpingAtInterval) {
+
+
+        LOGE("_________________________________________________________________________________");
+        LOGE("begin playback");
+        auto last_bcast = toneListenerCallback->getLastBroadcastSeen() ;
         toneGeneratorCallback->startPlayback();
-        while (!toneGeneratorCallback->has_broadcast_preamble)
+
+        while (!toneGeneratorCallback->hasFinishedBroadcasting)
             std::this_thread::sleep_for(wait);
 
-        LOGE("CHIRP SENT AT %llu", toneGeneratorCallback->last_broadcast_sent);
+        auto bcast_sent = toneGeneratorCallback->last_broadcast_sent;
+
+        LOGE("CHIRP SENT AT %llu", bcast_sent);
 
         toneGeneratorCallback->stopPlayback();
+
+        auto current_bcast = toneListenerCallback->getLastBroadcastSeen();
+
+        while (current_bcast == last_bcast){
+            std::this_thread::sleep_for(wait);
+            current_bcast = toneListenerCallback->getLastBroadcastSeen();
+        }
+
+        chirp_delay = (toneListenerCallback->getLastBroadcastSeen() - bcast_sent) / 2;
+        auto print_delay = chirp_delay / double(1e+6);
+        LOGE("CHIRP DELAY: %f", print_delay);
+
         std::this_thread::sleep_for(pause_between_chirp_starts);
+
+
     }
 
 }
@@ -148,24 +169,49 @@ Java_com_MIT_sonicPACT_NativeBridge_startAudioChirpAtInterval(JNIEnv *env, jclas
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_MIT_sonicPACT_NativeBridge_chirp(JNIEnv *env, jclass clazz) {
-    // TODO: implement chirp(), sends a chirp for N milliseconds
-    std::chrono::nanoseconds chirp_duration(CHIRP_LEN_NS);
+    // Chirps one time
+    std::chrono::nanoseconds one(1);
+    std::chrono::milliseconds mili(3);
+
+    auto last_bcast = toneListenerCallback->getLastBroadcastSeen() ;
     toneGeneratorCallback->startPlayback();
-    std::this_thread::sleep_for(chirp_duration);
+    while (!toneGeneratorCallback->hasFinishedBroadcasting)
+        std::this_thread::sleep_for(one);
+
+    auto bcast_sent = toneGeneratorCallback->last_broadcast_sent;
+    LOGE("CHIRP SENT AT %llu", toneGeneratorCallback->last_broadcast_sent);
+
     toneGeneratorCallback->stopPlayback();
+
+    auto current_bcast = toneListenerCallback->getLastBroadcastSeen();
+    while (current_bcast == last_bcast){
+        std::this_thread::sleep_for(one);
+        current_bcast = toneListenerCallback->getLastBroadcastSeen();
+    }
+
+    chirp_delay = (toneListenerCallback->getLastBroadcastSeen() - bcast_sent) / 2;
+    auto print_delay = chirp_delay / double(1e+6);
+    LOGE("CHIRP DELAY: %f", print_delay);
+    LOGE("_________________________________________________________________________________");
+
+    std::this_thread::sleep_for(mili);
 }
 
 extern "C"
 JNIEXPORT jlong JNICALL
 Java_com_MIT_sonicPACT_NativeBridge_getLastChirpRecvTime(JNIEnv *env, jclass clazz) {
-    return (jlong) toneListenerCallback->last_broadcast_seen;
+    return (jlong) toneListenerCallback->getLastRecvSeen();
 }
 
 extern "C"
 JNIEXPORT jlong JNICALL
 Java_com_MIT_sonicPACT_NativeBridge_getLastChirpSentTime(JNIEnv *env, jclass clazz) {
     LOGE("GetLASTCHIRPTIME");
-    return (jlong) toneGeneratorCallback->lastBroadcastTime;
+    std::chrono::nanoseconds one(1);
+    // Wait until broadcasting has finished
+
+    //return (jlong) toneGeneratorCallback->last_broadcast_sent;
+    return (jlong) toneListenerCallback->getLastBroadcastSeen();
 }
 
 extern "C"
@@ -189,17 +235,16 @@ Java_com_MIT_sonicPACT_NativeBridge_setLeader(JNIEnv *env, jclass clazz, jboolea
     LOGE("SETTING IS LEADER %d",is_leader);
     bool shouldChangeToLeader = (bool)is_leader;
 
-    if (shouldChangeToLeader == isCurrentlyLeader)
-        return;
+    //if (shouldChangeToLeader == isCurrentlyLeader.load(std::memory_order_acquire))
+    //return;
 
-    toneListenerCallback->setIsLeader(shouldChangeToLeader);
+    toneListenerCallback->isLeader(shouldChangeToLeader);
+    toneGeneratorCallback->setLeader(shouldChangeToLeader);
     isCurrentlyLeader.store(shouldChangeToLeader);
-
-    //toneListenerCallback.setFrequency(static_cast<float>((double) 1800));
 }
 
 extern "C"
 JNIEXPORT jlong JNICALL
 Java_com_MIT_sonicPACT_NativeBridge_getLastChirpDelayNS(JNIEnv *env, jclass clazz) {
-    return chirp_delay;
+    return (jlong) chirp_delay;
 }

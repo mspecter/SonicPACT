@@ -18,11 +18,9 @@ AudioListenerCallback::onAudioReady(oboe::AudioStream *audioStream, void *audioD
     if(!stopped){
         uint64_t timestmp = getTimeNsec();
 
-        detectorMTX.lock();
-        detector->update(shortdata, numFrames, timestmp);
-        last_broadcast_seen = detector->last_broadcast_seen;
-        last_recv_seen = detector->last_recv_seen;
-        detectorMTX.unlock();
+        detector.update(shortdata, numFrames, timestmp);
+        last_broadcast_seen = detector.last_broadcast_seen_finished;
+        last_recv_seen = detector.last_recv_seen;
     }
 
     return oboe::DataCallbackResult::Continue;

@@ -12,26 +12,26 @@ AudioGeneratorCallback::onAudioReady(oboe::AudioStream *audioStream, void *audio
     float *floatData = (float *) audioData;
 
     if (shouldBroadcast) {
+
         isBroadcasting = true;
-
-        for (int i = 0; i < numFrames; i++) {
-            int index = current_index + i;
-
-            if (index < generated_wave.size())
-                floatData[i] = generated_wave[index];
-            else {
-                floatData[i] = 0;
-                if (!has_broadcast_preamble) {
-                    last_broadcast_sent = getTimeNsec();
-                    LOGE("FINISHED BROADCASTING %llu", last_broadcast_sent);
-                    has_broadcast_preamble = true;
-                }
-            }
+        if (current_index + numFrames < generated_wave.size()) {
+            memcpy(floatData, &generated_wave[current_index], numFrames*sizeof(float));
+            current_index += numFrames;
+        }
+        else {
+            auto len = current_index + numFrames - generated_wave.size();
+            memcpy(floatData, &generated_wave[current_index], len*sizeof(float));
+            last_broadcast_sent = getTimeNsec();
+            memset(floatData+len, 0, sizeof(float) * len);
+            LOGE("FINISHED BROADCASTING %llu", last_broadcast_sent);
+            shouldBroadcast = false;
+            hasFinishedBroadcasting = true;
+            current_index = 0;
         }
 
-        current_index += numFrames;
     }
     else {
+        isBroadcasting = false;
         memset(audioData, 0, sizeof(float) * numFrames);
     }
 

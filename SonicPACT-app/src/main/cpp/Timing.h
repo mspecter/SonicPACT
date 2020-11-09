@@ -19,7 +19,7 @@ const static float SAMPLES_PER_TRANSITION = SAMPLE_RATE / 1000;
 
 static long CHIRP_LEN_NS = static_cast<long>(SAMPLES_PER_SYMBOL * 1000000 * PREAMBLE_LEN);
 
-static uint64_t getTimeNsec() {
+static inline uint64_t getTimeNsec() {
     struct timespec now;
     clock_gettime(CLOCK_BOOTTIME, &now);
     return (uint64_t) now.tv_sec*1000000000LL + now.tv_nsec;

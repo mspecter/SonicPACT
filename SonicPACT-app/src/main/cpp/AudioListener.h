@@ -52,6 +52,13 @@ public:
         shouldTakeMeasure = true;
     }
 
+    uint64_t getLastBroadcastSeen(){
+        return detector.last_broadcast_seen_finished;
+    }
+
+    uint64_t getLastRecvSeen(){
+        return detector.last_recv_seen;
+    }
 
     oboe::ManagedStream managedStream;
     uint64_t last_broadcast_seen = 0;
@@ -60,16 +67,10 @@ public:
     void setFrequency(float frequency);
     void setOwnFrequency(float frequency);
 
-    void setIsLeader(bool isLeader){
-
-        if (this == nullptr)
-            LOGE("wat");
+    void isLeader(bool isLeader){
 
         //this->stopped = true;
-        if (detector == nullptr)
-            LOGE("SOMETHING HAS GONE HORRIBLY WRONG");
-        else
-            detector->setIsLeader(isLeader);
+        detector.setIsLeader(isLeader);
         //startRecord();
     }
 
@@ -84,7 +85,7 @@ private:
     float mListenFrequency = 18000;
 
 
-    MatchedFilterDetector *detector = new MatchedFilterDetector(kSampleRate, true);
+    MatchedFilterDetector &detector = MatchedFilterDetector::getInstance(kSampleRate, true);
 
 
     bool dumpBuffer = false;
