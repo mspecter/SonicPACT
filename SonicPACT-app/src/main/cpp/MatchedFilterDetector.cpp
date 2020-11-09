@@ -91,7 +91,7 @@ void MatchedFilterDetector::runNannyThread() {
             // listen for a broadcast first, if that trips, then remove those samples
             // if the broadcast wave has been hit, remove the bcast samples
 
-            runDetect(target_buffer, &broadcast_wave_to_match, last_broadcast_seen_finished, 100, &bcast_result);
+            runDetect(target_buffer, &broadcast_wave_to_match, last_broadcast_seen_finished, 10, &bcast_result);
 
             if (bcast_result.succeeded) {
                 // Broadcast detected, clear it from the target buffer
@@ -132,7 +132,7 @@ void MatchedFilterDetector::runNannyThread() {
                 LOGE("^^ broadcast");
             }
 
-            runDetect(target_buffer, &recv_wave_to_match, last_recv_seen, 1, &recv_result);
+            runDetect(target_buffer, &recv_wave_to_match, last_recv_seen, 2, &recv_result);
             if (recv_result.succeeded && ! bcast_result.succeeded){
                 if (recv_result.broadcast_finished - last_recv_seen > 2e6){
                     last_recv_seen = recv_result.broadcast_finished;
@@ -204,7 +204,6 @@ void MatchedFilterDetector::runDetect(Mat* data, Mat* wave_to_match, uint64_t la
     meanStdDev(result_buffer, mean, stddev);
 
     // Threshold based on noise data:
-    /*
     cv::Mat dst2 = result_buffer > noise*thresh;
     double minVal2 = 0;
     double maxVal2 = 0;
@@ -219,7 +218,6 @@ void MatchedFilterDetector::runDetect(Mat* data, Mat* wave_to_match, uint64_t la
     }
 
 
-     */
     // If the beginning of the broadcast starts at a point where we'd probably be clipped, skip
     if (maxLoc.x > BEGIN_BUFF_OVERLAP)
         return;
@@ -256,8 +254,8 @@ void MatchedFilterDetector::runDetect(Mat* data, Mat* wave_to_match, uint64_t la
     result->mean = mean[0];
 
     // show detection
-    if (maxVal > thresh) {
-    //if (maxVal2 == 255) {
+    //if (maxVal > thresh) {
+    if (maxVal2 == 255) {
         result->broadcast_started  = broadcast_started;
         result->broadcast_finished = broadcast_finished;
         result->succeeded = true;
