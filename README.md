@@ -5,6 +5,7 @@
 
 We have the following dependencies. Put them in the **same** directory you cloned this repo:
 1. Download opencv's android SDK from [here](https://opencv.org/releases/), specifically version 4.3.0.
-2. Download [Oboe](https://github.com/google/oboe)
+2. Download [Oboe](https://github.com/google/oboe), most recent version should work.
+3. Open the project in android studio. From this point on, Gradle should work.
 
 
